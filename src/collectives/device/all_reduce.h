@@ -8,6 +8,7 @@
 #include "primitives.h"
 #include "collectives.h"
 
+#include <curand_kernel.h>
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
@@ -24,6 +25,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
     const int nranks = comm->nRanks;
     const ssize_t loopSize = nChannels*(ssize_t)chunkSize;
     const ssize_t size = args->coll.count;
+    FusedDropoutBiasParams fusedDropoutBiasParams = args->fusedDropoutBiasParams;
 
     // Compute pointers
     const T * __restrict__ thisInput = (const T*)args->sendbuff;
@@ -31,6 +33,12 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
 
     ncclPrimitives<UNROLL, ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS, T, 1, 1, 1, FUNC>
       prims(tid, nthreads, &ring->prev, &ring->next, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
+    
+    curandState randState;
+    if (fusedDropoutBiasParams.bias != nullptr) {
+      curand_init(threadIdx.x, 0, 0, &randState);
+      prims.setRandNumGen(&randState);
+    }
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += nranks*loopSize) {
       ssize_t realChunkSize = min(chunkSize, DIVUP(size-gridOffset,nranks*nChannels));
@@ -63,8 +71,12 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
       chunk = ring->devUserRanks[0];
       offset = chunkOffset + chunk * realChunkSize;
       nelem = min(realChunkSize, size-offset);
-
-      prims.directRecvReduceCopySend(thisInput+offset, thisOutput+offset, offset, nelem);
+      if (fusedDropoutBiasParams.bias != nullptr) {
+        //Do Dropout and Bias addition
+        prims.directRecvReduceCopySendDropoutBias(thisInput+offset, thisOutput+offset, offset, nelem, (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, 1.0f);
+      } else {
+        prims.directRecvReduceCopySend(thisInput+offset, thisOutput+offset, offset, nelem);
+      }
 
       // k-2 steps: copy to next GPU
       for (int j=1; j<nranks-1; ++j) {

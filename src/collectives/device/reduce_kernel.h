@@ -59,6 +59,7 @@ static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {
   return (r0 & MASK0) | (r1 & MASK1);
 }
 
+
 template<>
 struct FuncSum<int8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {

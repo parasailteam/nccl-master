@@ -55,6 +55,7 @@ class ncclPrimitives {
   volatile uint64_t* connTailPtr = NULL;
   uint64_t connTailCache; // Cache last seen value
   uint64_t connHeadCache; // Cache last seen value
+  curandState* randNumGen;
 
   int index; // Peer index I'm responsible for
   int peer = -1;
@@ -67,6 +68,7 @@ class ncclPrimitives {
 
   const T** srcs;
   T** dsts;
+
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -131,9 +133,9 @@ class ncclPrimitives {
     *connTailPtr = step += SLICESTEPS;
   }
 
-  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, int DROPOUT_BIAS_LAYERNORM>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset) {
+  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, T* bias, size_t biasSize, float dropoutProb) {
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -151,10 +153,10 @@ class ncclPrimitives {
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb);
             }
           } else {
-            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
+            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb);
           }
         }
       }
@@ -261,61 +263,69 @@ class ncclPrimitives {
     loadSendConn(channel);
   }
 
+  __device__ __forceinline__ void setRandNumGen (curandState* state) {randNumGen = state;}
   __device__ __forceinline__ void
   send(const T* src, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, nelem, 0);
+    GenericOp<0, 0, 0, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0);
   }
   __device__ __forceinline__ void
   directSend(const T* src, ssize_t directOffset, int nelem) {
-    GenericOp<0, 1, 0, 1, 1, 0>(src, NULL, nelem, directOffset);
+    GenericOp<0, 1, 0, 1, 1, 0, 0>(src, NULL, nelem, directOffset, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   recv(T* dst, int nelem) {
-    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, nelem, 0);
+    GenericOp<0, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0);
   }
   __device__ __forceinline__ void
   directRecv(T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<1, 0, 1, 0, 0, 1>(NULL, dst, nelem, directOffset);
+    GenericOp<1, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   copySend(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 1>(src, dst, nelem, 0);
+    GenericOp<0, 0, 0, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
   }
   __device__ __forceinline__ void
   directCopySend(const T* src, T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<0, 1, 0, 1, 1, 1>(src, dst, nelem, directOffset);
+    GenericOp<0, 1, 0, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   recvCopySend(T* dst, int nelem) {
-    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, nelem, 0);
+    GenericOp<0, 0, 1, 1, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0);
   }
   __device__ __forceinline__ void
   directRecvCopySend(T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<1, 1, 1, 1, 0, 1>(NULL, dst, nelem, directOffset);
+    GenericOp<1, 1, 1, 1, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   recvReduceCopy(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 1, 0, 1, 1>(src, dst, nelem, 0);
+    GenericOp<0, 0, 1, 0, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   recvReduceSend(const T* src, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, nelem, 0);
+    GenericOp<0, 0, 1, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0);
   }
 
   __device__ __forceinline__ void
   recvReduceCopySend(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 1>(src, dst, nelem, 0);
+    GenericOp<0, 0, 1, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
   }
   __device__ __forceinline__ void
   directRecvReduceCopySend(const T* src, T* dst, ssize_t directOffset, int nelem) {
     // Direct is only for the send part
-    GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
+    GenericOp<0, 1, 1, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0);
   }
+
+  __device__ __forceinline__ void
+  directRecvReduceCopySendDropoutBias(const T* src, T* dst, ssize_t directOffset, int nelem, T* bias, size_t biasSize, float dropoutProb) {
+    // Direct is only for the send part
+    GenericOp<0, 1, 1, 1, 1, 1, 0>(src, dst, nelem, directOffset, bias, biasSize, dropoutProb);
+  }
+
 
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation

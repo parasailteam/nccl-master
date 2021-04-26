@@ -23,6 +23,7 @@ typedef enum {
   ncclPatternSckl
 } ncclPattern_t;
 
+
 // Used to pass NCCL call information between functions
 struct ncclInfo {
   ncclFunc_t coll;
@@ -52,6 +53,8 @@ struct ncclInfo {
   ssize_t recvbytes;
   uint32_t delta;
   int channelId;
+
+  FusedDropoutBiasParams fusedDropoutBiasParams;
 };
 
 #endif
