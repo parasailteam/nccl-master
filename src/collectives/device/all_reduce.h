@@ -73,7 +73,8 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
       nelem = min(realChunkSize, size-offset);
       if (fusedDropoutBiasParams.bias != nullptr) {
         //Do Dropout and Bias addition
-        prims.directRecvReduceCopySendDropoutBias(thisInput+offset, thisOutput+offset, offset, nelem, (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, 1.0f);
+        prims.directRecvReduceCopySendDropoutBias(thisInput+offset, thisOutput+offset, offset, nelem, 
+                                                  (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, fusedDropoutBiasParams.dropoutProb);
       } else {
         prims.directRecvReduceCopySend(thisInput+offset, thisOutput+offset, offset, nelem);
       }

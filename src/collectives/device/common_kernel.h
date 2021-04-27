@@ -29,7 +29,8 @@ typedef uint64_t PackType;
 template<typename T>
 struct FuncDropout {
   __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p) {
-    return (curand_uniform(randState) < p ? val  : (T)0.0f) + biasVal;
+    T out = (curand_uniform(randState) < p ? val  : (T)0.0f) + biasVal;
+    return out;
   }
 };
 
@@ -345,15 +346,19 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
       }
     }
 
-    // Store
-    #pragma unroll
-    for (int i = 0; i < MINDSTS; i++) {
-      for (int u = 0; u < UNROLL; ++u) vStore(dsts[i]+u*WARP_SIZE, vals[u]);
-    }
-    #pragma unroll
-    for (int i=MINDSTS; i<MAXDSTS; i++) {
-      if (i<ndsts) {
-        for (int u = 0; u < UNROLL; ++u) vStore(dsts[i]+u*WARP_SIZE, vals[u]);
+    for (int u = 0; u < UNROLL; ++u) {
+      // FuncDropout<T>()(vals[u], biasVal, randNumGen, dropoutProb);
+      // vals[u] = FuncDropout
+      // Store
+      #pragma unroll
+      for (int i = 0; i < MINDSTS; i++) {
+        vStore(dsts[i]+u*WARP_SIZE, vals[u]);
+      }
+      #pragma unroll
+      for (int i=MINDSTS; i<MAXDSTS; i++) {
+        if (i<ndsts) {
+          vStore(dsts[i]+u*WARP_SIZE, vals[u]);
+        }
       }
     }
     for (int i=0; i<MAXSRCS; i++) srcs[i] += inc;

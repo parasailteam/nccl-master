@@ -323,7 +323,7 @@ class ncclPrimitives {
   __device__ __forceinline__ void
   directRecvReduceCopySendDropoutBias(const T* src, T* dst, ssize_t directOffset, int nelem, T* bias, size_t biasSize, float dropoutProb) {
     // Direct is only for the send part
-    GenericOp<0, 1, 1, 1, 1, 1, 0>(src, dst, nelem, directOffset, bias, biasSize, dropoutProb);
+    GenericOp<0, 1, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset, bias, biasSize, dropoutProb);
   }
 
 
