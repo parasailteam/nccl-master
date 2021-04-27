@@ -371,9 +371,11 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
     }
 
     for (int u = 0; u < UNROLL; ++u) {
-      size_t totalOffset = mainBufferOffset + elemOffset+offset;
-      size_t biasOffset = totalOffset % biasSize;
-      vals[u] = FuncDropout2<T>()(vals[u], bias[biasOffset], randNumGen, dropoutProb);
+      if (DROPOUT_BIAS_LAYERNORM) {
+        size_t totalOffset = mainBufferOffset + elemOffset+offset;
+        size_t biasOffset = totalOffset % biasSize;
+        vals[u] = FuncDropout2<T>()(vals[u], bias[biasOffset], randNumGen, dropoutProb);
+      }
       // Store
       #pragma unroll
       for (int i = 0; i < MINDSTS; i++) {
