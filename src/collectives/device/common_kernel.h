@@ -51,6 +51,30 @@ struct FuncDropout<half2> {
 };
 
 
+template<typename T>
+struct FuncDropout2 {
+  __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p) {
+    T out = (curand_uniform(randState) < p ? val  : (T)0.0f) + biasVal;
+    return out;
+  }
+};
+
+template<>
+struct FuncDropout2<half> {
+  __device__ half operator()(const half val, const half biasVal,curandState* randState, const float p) {
+    half v = (curand_uniform(randState) < p ? val  : __float2half_rn(0.0f));
+    return (__hadd_sat(v, biasVal));
+  }
+};
+
+template<>
+struct FuncDropout2<half2> {
+  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p) {
+    half2 v = (curand_uniform(randState) < p ? val  : __float2half2_rn(0.0f));
+    return (__hadd2_sat(v, biasVal));
+  }
+};
+
 // unpack x and y to elements of type T and apply FUNC to each element
 template<class FUNC, typename T>
 struct MULTI {
@@ -347,8 +371,9 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
     }
 
     for (int u = 0; u < UNROLL; ++u) {
-      // FuncDropout<T>()(vals[u], biasVal, randNumGen, dropoutProb);
-      // vals[u] = FuncDropout
+      size_t totalOffset = mainBufferOffset + elemOffset+offset;
+      size_t biasOffset = totalOffset % biasSize;
+      vals[u] = FuncDropout2<T>()(vals[u], bias[biasOffset], randNumGen, dropoutProb);
       // Store
       #pragma unroll
       for (int i = 0; i < MINDSTS; i++) {
@@ -464,6 +489,9 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   #pragma unroll
   for (int i=0; i<MINDSTS; i++) align |= ptrAlign128(dsts[i]);
   for (int i=MINDSTS; i<MAXDSTS && i<ndsts; i++) align |= ptrAlign128(dsts[i]);
+
+  if (bias)
+    align |= ptrAlign128(bias);
 
   int offset = 0;
   if (align == 0) {
