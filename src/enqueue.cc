@@ -62,7 +62,8 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
-  NCCL_FUNCS2B(AllToAll)
+  NCCL_FUNCS2B(AllToAll),
+  NCCL_FUNCS2B(CustomColl)
 };
 
 /*****************************************************************************/
@@ -364,6 +365,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_SCKL ? ncclPatternSckl : ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
+    case ncclFuncCustomColl:
     case ncclFuncAllToAll:
       info->pattern = ncclPatternSckl; break;
     default:
