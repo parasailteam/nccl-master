@@ -42,7 +42,7 @@ class SCKLFunction {
       const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize*nScklInstnaces;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScklChunk = (size*nranks)/scklAlgo->nchunksPerLoop;
+      const ssize_t sizePerScklChunk = (size)/scklAlgo->nchunksPerLoop;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
