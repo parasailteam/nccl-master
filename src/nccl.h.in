@@ -236,6 +236,19 @@ ncclResult_t pncclncclAllToAll(const void* sendbuff, void* recvbuff, size_t send
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
 /*
+ * CustomColl
+ *
+ * It executes any given XML in the interpreter
+ *
+ * In-place operations is not permitted.
+ */
+ncclResult_t  ncclCustomColl(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
+ncclResult_t pncclCustomColl(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
+
+
+/*
  * Send
  *
  * Send data from sendbuff to rank peer.
