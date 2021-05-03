@@ -128,7 +128,8 @@ struct ncclRing {
 #define SCKL_RECV_COPY_SEND 2
 #define SCKL_RECV_REDUCE_SEND 3
 #define SCKL_RECV_REDUCE_COPY 4
-#define SCKL_NO_OP 5
+#define SCKL_RECV_REDUCE_BIASDROPOUT_COPY 5
+#define SCKL_NO_OP 6
 
 struct scklTransfer {
   int16_t srcoffset;
@@ -192,6 +193,13 @@ struct ncclDevComm;
 #define NCCL_MAX_WORK_ELEMENTS 8
 #define NCCL_MAX_GROUPS (NCCL_MAX_WORK_ELEMENTS*2)
 
+struct FusedDropoutBiasParams {
+  void* bias;
+  size_t biasSize;
+  float dropoutProb;
+};
+
+
 /* ncclWork is to be a power of two, currently 8x64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclWorkElem. */
@@ -209,6 +217,7 @@ struct ncclWorkElem {
   const void * sendbuff;
   void * recvbuff;
 
+  FusedDropoutBiasParams fusedDropoutBiasParams;
   // Op-specific fields.
   union {
     struct {
@@ -224,13 +233,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[8];
+    uint64_t align[21];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x40*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {

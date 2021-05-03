@@ -30,6 +30,7 @@ class SCKLFunction {
       struct scklThreadBlock* scklTB = &scklAlgo->scklTB[rscklbid];
       const int channelId = scklIndex * scklAlgo->nChannels + scklTB->channelId;
       struct ncclChannel* channel = comm->channels+channelId;
+      FusedDropoutBiasParams fusedDropoutBiasParams = args->fusedDropoutBiasParams;
 
       // Compute pointers
       T * thisInput = (T*)args->sendbuff;
@@ -47,6 +48,12 @@ class SCKLFunction {
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
       volatile struct scklFlag* scklFlags = comm->scklFlags;
+
+      curandState randState;
+      if (fusedDropoutBiasParams.bias != nullptr) {
+        curand_init(threadIdx.x, 0, 0, &randState);
+        prims.setRandNumGen(&randState);
+      }
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScklChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScklChunk, gridOffset, nScklInstnaces, scklIndex);
@@ -86,6 +93,8 @@ class SCKLFunction {
             case SCKL_RECV_REDUCE_COPY:
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
               break;
+            case SCKL_RECV_REDUCE_BIASDROPOUT_COPY:
+              prims.recvReduceCopyDropoutBias(srcPointer + srcoffset, dstPointer + dstoffset, (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, fusedDropoutBiasParams.dropoutProb);
             case SCKL_NO_OP:
               break;
             default:
@@ -124,6 +133,9 @@ struct SimpleWrapper {
     return chunkOffset;
   }
 
+  __device__ __forceinline__ void setRandNumGen (curandState* randState){
+    prims.setRandNumGen(randState);
+  };
   __device__ void send(T * chunkPointer, ssize_t dstoffset) {
     prims.directSend(chunkPointer, dstoffset, nelem);
   }
@@ -142,6 +154,10 @@ struct SimpleWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
+    prims.recvReduceCopyDropoutBias(srcChunkPointer, dstChunkPointer, nelem, bias, biasSize, dropoutProb);
   }
 };
 
@@ -171,6 +187,8 @@ struct LL128Wrapper {
     return chunkOffset;
   }
 
+  __device__ __forceinline__ void setRandNumGen (curandState* state){
+  };
   __device__ void send(T * chunkPointer, ssize_t dstoffset) {
     prims.send(chunkPointer, nelem);
   }
@@ -189,7 +207,10 @@ struct LL128Wrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
-  }  
+  }
+
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -214,6 +235,8 @@ struct LLWrapper {
     return chunkOffset;
   }
 
+  __device__ __forceinline__ void setRandNumGen (curandState* state){
+  };
   __device__ void send(T * chunkPointer, ssize_t dstoffset) {
     prims.send(chunkPointer, nelem);
   }
@@ -232,7 +255,10 @@ struct LLWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
-  }  
+  }
+
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>

@@ -40,7 +40,7 @@ class ncclFunction<ncclFuncSendRecv, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T,
               for (size_t offset=0; offset<sendCount; offset += blockSize) {
                 size_t remaining = sendCount - offset;
                 if (remaining < blockSize) blockSize = remaining;
-                ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, 1>(tid, nThreads, 1, &sendbuff, 1, &recvbuff, blockSize);
+                ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, 1, 0>(tid, nThreads, 1, &sendbuff, 1, &recvbuff, blockSize, 0, nullptr, 0, nullptr, 0.0f);
                 sendbuff += blockSize; recvbuff += blockSize;
               }
             }

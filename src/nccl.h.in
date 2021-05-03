@@ -243,8 +243,10 @@ ncclResult_t pncclncclAllToAll(const void* sendbuff, void* recvbuff, size_t send
  * In-place operations is not permitted.
  */
 ncclResult_t  ncclCustomColl(const void* sendbuff, void* recvbuff, size_t count,
+    void* bias, int biasSize, float dropoutProb,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t pncclCustomColl(const void* sendbuff, void* recvbuff, size_t count,
+    void* bias, int biasSize, float dropoutProb,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
 
 

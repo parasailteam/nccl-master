@@ -9,6 +9,7 @@
 
 #include "nccl.h"
 #include "devcomm.h"
+#include <curand_kernel.h>
 
 typedef enum {
   ncclPatternRing,
@@ -52,6 +53,8 @@ struct ncclInfo {
   ssize_t recvbytes;
   uint32_t delta;
   int channelId;
+
+  FusedDropoutBiasParams fusedDropoutBiasParams;
 };
 
 #endif
