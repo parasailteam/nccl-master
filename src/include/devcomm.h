@@ -197,6 +197,7 @@ struct FusedDropoutBiasParams {
   void* bias;
   size_t biasSize;
   float dropoutProb;
+  void* residual;
 };
 
 
@@ -233,13 +234,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[21];
+    uint64_t align[52];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x40*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x80*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {

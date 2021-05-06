@@ -94,7 +94,7 @@ class SCKLFunction {
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
               break;
             case SCKL_RECV_REDUCE_BIASDROPOUT_COPY:
-              prims.recvReduceCopyDropoutBias(srcPointer + srcoffset, dstPointer + dstoffset, (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, fusedDropoutBiasParams.dropoutProb);
+              prims.recvReduceCopyDropoutBias(srcPointer + srcoffset, dstPointer + dstoffset, (T*)fusedDropoutBiasParams.bias, fusedDropoutBiasParams.biasSize, fusedDropoutBiasParams.dropoutProb, (T*)fusedDropoutBiasParams.residual);
             case SCKL_NO_OP:
               break;
             default:
@@ -156,8 +156,8 @@ struct SimpleWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
   }
 
-  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
-    prims.recvReduceCopyDropoutBias(srcChunkPointer, dstChunkPointer, nelem, bias, biasSize, dropoutProb);
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb, T* residual) {
+    prims.recvReduceCopyDropoutBias(srcChunkPointer, dstChunkPointer, nelem, bias, biasSize, dropoutProb, residual);
   }
 };
 
@@ -209,7 +209,7 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
   }
 
-  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb, T* residual) {
   }
 };
 
@@ -257,7 +257,7 @@ struct LLWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
   }
 
-  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb) {
+  __device__ void recvReduceCopyDropoutBias(T * srcChunkPointer, T * dstChunkPointer, T * bias, size_t biasSize, float dropoutProb, T* residual) {
   }
 };
 

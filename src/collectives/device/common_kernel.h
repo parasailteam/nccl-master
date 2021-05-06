@@ -28,50 +28,50 @@ typedef uint64_t PackType;
 
 template<typename T>
 struct FuncDropout {
-  __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p) {
-    T out = (curand_uniform(randState) < p ? val  : (T)0.0f) + biasVal;
+  __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p, const T residualVal) {
+    T out = (curand_uniform(randState) < p ? val + biasVal : (T)0.0f) + residualVal;
     return out;
   }
 };
 
 template<>
 struct FuncDropout<half> {
-  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p) {
-    half2 v = (curand_uniform(randState) < p ? val  : __float2half2_rn(0.0f));
-    return (__hadd2_sat(v, biasVal));
+  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p, const half2 residualVal) {
+    half2 v = (curand_uniform(randState) < p ? __hadd2_sat(val, biasVal)  : __float2half2_rn(0.0f));
+    return (__hadd2_sat(v, residualVal));
   }
 };
 
 template<>
 struct FuncDropout<half2> {
-  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p) {
-    half2 v = (curand_uniform(randState) < p ? val  : __float2half2_rn(0.0f));
-    return (__hadd2_sat(v, biasVal));
+  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p, const half2 residualVal) {
+    half2 v = (curand_uniform(randState) < p ? __hadd2_sat(val, biasVal) : __float2half2_rn(0.0f));
+    return (__hadd2_sat(v, residualVal));
   }
 };
 
 
 template<typename T>
 struct FuncDropout2 {
-  __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p) {
-    T out = (curand_uniform(randState) < p ? val  : (T)0.0f) + biasVal;
+  __device__ T operator()(const T val, const T biasVal, curandState* randState, const float p, const T residualVal) {
+    T out = (curand_uniform(randState) < p ? val + biasVal : (T)0.0f) + residualVal;
     return out;
   }
 };
 
 template<>
 struct FuncDropout2<half> {
-  __device__ half operator()(const half val, const half biasVal,curandState* randState, const float p) {
-    half v = (curand_uniform(randState) < p ? val  : __float2half_rn(0.0f));
-    return (__hadd_sat(v, biasVal));
+  __device__ half operator()(const half val, const half biasVal,curandState* randState, const float p, const half residualVal) {
+    half v = (curand_uniform(randState) < p ? __hadd_sat(val, biasVal)  : __float2half_rn(0.0f));
+    return (__hadd_sat(v, residualVal));
   }
 };
 
 template<>
 struct FuncDropout2<half2> {
-  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p) {
-    half2 v = (curand_uniform(randState) < p ? val  : __float2half2_rn(0.0f));
-    return (__hadd2_sat(v, biasVal));
+  __device__ half2 operator()(const half2 val, const half2 biasVal,curandState* randState, const float p, const half2 residualVal) {
+    half2 v = (curand_uniform(randState) < p ? __hadd2_sat(val, biasVal)  : __float2half2_rn(0.0f));
+    return (__hadd2_sat(v, residualVal));
   }
 };
 
@@ -79,7 +79,7 @@ struct FuncDropout2<half2> {
 template<class FUNC, typename T>
 struct MULTI {
   __device__ PackType operator()(const PackType x, const PackType y) const;
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) const;
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) const;
 };
 
 template<class FUNC>
@@ -104,7 +104,7 @@ struct MULTI<FUNC, int8_t> {
 
     return cr.storage;
   }
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -129,7 +129,7 @@ struct MULTI<FUNC, uint8_t> {
 
     return cr.storage;
   }
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -153,7 +153,7 @@ struct MULTI<FUNC, int32_t> {
 
     return cr.storage;
   }
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -177,7 +177,7 @@ struct MULTI<FUNC, uint32_t> {
 
     return cr.storage;
   }
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -200,13 +200,14 @@ struct MULTI<FUNC, half> {
     return *(reinterpret_cast<PackType*>(&cr));
   }
 
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {
-    struct PackHalf2 cx, cb, cr;
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {
+    struct PackHalf2 cx, cb, cr, cy;
     cx = *(reinterpret_cast<const struct PackHalf2*>(&x));
     cb = *(reinterpret_cast<const struct PackHalf2*>(&biasVal));
+    cy = *(reinterpret_cast<const struct PackHalf2*>(&residual));
 
-    cr.a = FUNC()(cx.a, cb.a, randState, dropoutProb);
-    cr.b = FUNC()(cx.b, cb.b, randState, dropoutProb);
+    cr.a = FUNC()(cx.a, cb.a, randState, dropoutProb, cy.a);
+    cr.b = FUNC()(cx.b, cb.b, randState, dropoutProb, cy.b);
 
     return *(reinterpret_cast<PackType*>(&cr));
   }
@@ -234,13 +235,14 @@ struct MULTI<FUNC, float> {
     return cr.storage;
   }
 
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {
-    converter cx, cb, cr;
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {
+    converter cx, cb, cr, cy;
     cx.storage = x;
     cb.storage = biasVal;
+    cy.storage = residual;
 
-    cr.a = FUNC()(cx.a, cb.a, randState, dropoutProb);
-    cr.b = FUNC()(cx.b, cb.b, randState, dropoutProb);
+    cr.a = FUNC()(cx.a, cb.a, randState, dropoutProb, cy.a);
+    cr.b = FUNC()(cx.b, cb.b, randState, dropoutProb, cy.b);
 
     return cr.storage;
   }
@@ -255,7 +257,7 @@ struct MULTI<FUNC, double> {
     return __double_as_longlong(rv);
   }
 
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -267,7 +269,7 @@ struct MULTI<FUNC, uint64_t> {
     return rv;
   }
 
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<class FUNC>
@@ -279,7 +281,7 @@ struct MULTI<FUNC, int64_t> {
     return rv;
   }
 
-  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb) {/*Not implemented*/}
+  __device__ PackType dropoutBias(const PackType x, const PackType biasVal, curandState* randState, float dropoutProb, const PackType residual) {/*Not implemented*/}
 };
 
 template<typename T> inline __device__
@@ -326,9 +328,9 @@ struct MULTI128 {
     x.x = MULTI<FUNC, T>()(x.x, y.x);
     x.y = MULTI<FUNC, T>()(x.y, y.y);
   }
-  __device__ void dropoutBias(Pack128& x, const Pack128& biasVal, curandState* randState, float dropoutProb) {
-    x.x = MULTI<FUNC, T>().dropoutBias(x.x, biasVal.x, randState, dropoutProb);
-    x.y = MULTI<FUNC, T>().dropoutBias(x.y, biasVal.y, randState, dropoutProb);
+  __device__ void dropoutBias(Pack128& x, const Pack128& biasVal, curandState* randState, float dropoutProb, const Pack128& residualVal) {
+    x.x = MULTI<FUNC, T>().dropoutBias(x.x, biasVal.x, randState, dropoutProb, residualVal.x);
+    x.y = MULTI<FUNC, T>().dropoutBias(x.y, biasVal.y, randState, dropoutProb, residualVal.y);
   }
 };
 
@@ -341,7 +343,7 @@ inline __device__ void Store128(Pack128* p, Pack128& v) {
 
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int DROPOUT_BIAS_LAYERNORM>
 __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const int t,
-    int nsrcs, const T** s, int ndsts, T** d, const int elemOffset, const int Nelem, size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb) {
+    int nsrcs, const T** s, int ndsts, T** d, const int elemOffset, const int Nelem, size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb, T* residual) {
   const int inc = nw * UNROLL * WARP_SIZE;
   int offset = w * UNROLL * WARP_SIZE + t;
 
@@ -374,7 +376,7 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
       if (DROPOUT_BIAS_LAYERNORM) {
         size_t totalOffset = mainBufferOffset + elemOffset+offset;
         size_t biasOffset = totalOffset % biasSize;
-        vals[u] = FuncDropout2<T>()(vals[u], bias[biasOffset], randNumGen, dropoutProb);
+        vals[u] = FuncDropout2<T>()(vals[u], bias[biasOffset], randNumGen, dropoutProb, residual[totalOffset]);
       }
       // Store
       #pragma unroll
@@ -397,7 +399,7 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int DROPOUT_BIAS_LAYERNORM>
 __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, const int t,
     int nsrcs, const T** s, int ndsts, T** d, const int elemOffset, const int Npack, 
-    size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb) {
+    size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb, T* residual) {
   const int inc = nw * UNROLL * WARP_SIZE;
   int offset = w * UNROLL * WARP_SIZE + t;
 
@@ -435,7 +437,9 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
 
         Pack128 biasVal;
         Fetch128(biasVal, (Pack128*)(bias+biasOffset));
-        MULTI128<FuncDropout<T>, T>().dropoutBias(vals[u], biasVal, randNumGen, dropoutProb);
+        Pack128 residualVal;
+        Fetch128(residualVal, (Pack128*)(residual+totalOffset));
+        MULTI128<FuncDropout<T>, T>().dropoutBias(vals[u], biasVal, randNumGen, dropoutProb, residualVal);
 
         #pragma unroll
         for (int i = 0; i < MINDSTS; i++) {
@@ -475,7 +479,7 @@ __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int DROPOUT_BIAS_LAYERNORM>
 __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthreads,
     int nsrcs, const T** srcs, int ndsts, T** dsts,
-    int N, size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb) {
+    int N, size_t mainBufferOffset, T* bias, int biasSize, curandState* randNumGen, float dropoutProb, T *residual) {
   int Nrem = N;
   if (Nrem <= 0) return;
 
@@ -504,7 +508,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
     int Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Npack, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb);
+    ReduceCopy128bMulti<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Npack, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb, residual);
 
     Nrem -= Nelem;
     if (Nrem == 0) return;
@@ -514,7 +518,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     Npack = Nrem / PACKELEMS;
     Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Npack, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb);
+    ReduceCopy128bMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Npack, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb, residual);
 
     Nrem -= Nelem;
     if (Nrem == 0) return;
@@ -524,14 +528,14 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   // unrolled, by-type (mostly for unaligned buffers)
   int Nelem = (Nrem / (UNROLL*PACKELEMS/2*WARP_SIZE)) * (UNROLL*PACKELEMS/2*WARP_SIZE); // round down
 
-  ReduceCopyMulti<FUNC, T, UNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nelem, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb);
+  ReduceCopyMulti<FUNC, T, UNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nelem, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb, residual);
 
   Nrem -= Nelem;
   if (Nrem == 0) return;
   offset += Nelem;
 
   // no unroll, by type. Should finish what's remaining.
-  ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb);
+  ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, DROPOUT_BIAS_LAYERNORM>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem, mainBufferOffset + offset*PACKELEMS, bias, biasSize, randNumGen, dropoutProb, residual);
 }
 
 #endif // COMMON_KERNEL_H_

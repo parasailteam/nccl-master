@@ -135,7 +135,7 @@ class ncclPrimitives {
 
   template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, int DROPOUT_BIAS_LAYERNORM>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, T* bias, size_t biasSize, float dropoutProb) {
+  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, T* bias, size_t biasSize, float dropoutProb, T* residual) {
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -153,10 +153,10 @@ class ncclPrimitives {
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb);
+              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb, residual);
             }
           } else {
-            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb);
+            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, DROPOUT_BIAS_LAYERNORM>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize, offset+directOffset, bias, biasSize, randNumGen, dropoutProb, residual);
           }
         }
       }
@@ -266,69 +266,69 @@ class ncclPrimitives {
   __device__ __forceinline__ void setRandNumGen (curandState* state) {randNumGen = state;}
   __device__ __forceinline__ void
   send(const T* src, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 0, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0, nullptr);
   }
   __device__ __forceinline__ void
   directSend(const T* src, ssize_t directOffset, int nelem) {
-    GenericOp<0, 1, 0, 1, 1, 0, 0>(src, NULL, nelem, directOffset, nullptr, 0, 0);
+    GenericOp<0, 1, 0, 1, 1, 0, 0>(src, NULL, nelem, directOffset, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
   recv(T* dst, int nelem) {
-    GenericOp<0, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0, nullptr);
   }
   __device__ __forceinline__ void
   directRecv(T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<1, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0);
+    GenericOp<1, 0, 1, 0, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
   copySend(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 0, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0, nullptr);
   }
   __device__ __forceinline__ void
   directCopySend(const T* src, T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<0, 1, 0, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0);
+    GenericOp<0, 1, 0, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
   recvCopySend(T* dst, int nelem) {
-    GenericOp<0, 0, 1, 1, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 1, 1, 0, 1, 0>(NULL, dst, nelem, 0, nullptr, 0, 0, nullptr);
   }
   __device__ __forceinline__ void
   directRecvCopySend(T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<1, 1, 1, 1, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0);
+    GenericOp<1, 1, 1, 1, 0, 1, 0>(NULL, dst, nelem, directOffset, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
   recvReduceCopy(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 1, 0, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 1, 0, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
-  recvReduceCopyDropoutBias(const T* src, T* dst, int nelem, T* bias, size_t biasSize, float dropoutProb) {
-    GenericOp<0, 0, 1, 0, 1, 1, 1>(src, dst, nelem, 0, bias, biasSize, dropoutProb);
+  recvReduceCopyDropoutBias(const T* src, T* dst, int nelem, T* bias, size_t biasSize, float dropoutProb, T* residual) {
+    GenericOp<0, 0, 1, 0, 1, 1, 1>(src, dst, nelem, 0, bias, biasSize, dropoutProb, residual);
   }
 
   __device__ __forceinline__ void
   recvReduceSend(const T* src, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 1, 1, 1, 0, 0>(src, NULL, nelem, 0, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
   recvReduceCopySend(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0);
+    GenericOp<0, 0, 1, 1, 1, 1, 0>(src, dst, nelem, 0, nullptr, 0, 0, nullptr);
   }
   __device__ __forceinline__ void
   directRecvReduceCopySend(const T* src, T* dst, ssize_t directOffset, int nelem) {
     // Direct is only for the send part
-    GenericOp<0, 1, 1, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0);
+    GenericOp<0, 1, 1, 1, 1, 1, 0>(src, dst, nelem, directOffset, nullptr, 0, 0, nullptr);
   }
 
   __device__ __forceinline__ void
-  directRecvReduceCopySendDropoutBias(const T* src, T* dst, ssize_t directOffset, int nelem, T* bias, size_t biasSize, float dropoutProb) {
+  directRecvReduceCopySendDropoutBias(const T* src, T* dst, ssize_t directOffset, int nelem, T* bias, size_t biasSize, float dropoutProb, T* residual) {
     // Direct is only for the send part
-    GenericOp<0, 1, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset, bias, biasSize, dropoutProb);
+    GenericOp<0, 1, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset, bias, biasSize, dropoutProb, residual);
   }
 
 
