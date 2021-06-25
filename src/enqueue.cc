@@ -62,7 +62,8 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
-  NCCL_FUNCS2B(AllToAll)
+  NCCL_FUNCS2B(AllToAll),
+  NCCL_FUNCS2B(CustomCollective)
 };
 
 /*****************************************************************************/
@@ -367,6 +368,8 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
       info->pattern = ncclPatternSccl; break;
+    case ncclFuncCustomCollective:
+      info->pattern = ncclPatternSccl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -439,7 +442,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->nThreads = info->nThreads;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
-
+  printf("work->funcIndex %d info->coll %d, info->op %d, info->datatype %d, info->algorithm %d, info->protocol %d\n", work->funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+  printf("ncclKerns elems = %d\n", sizeof(ncclKerns)/sizeof(ncclKerns[0]));
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->chunkSteps : 1;
   int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->sliceSteps : 1;
@@ -484,7 +488,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
   // sccl might use multiple channels per loop. therefore, the division by info->comm->scclAlgo.nChannels is necessary if the algo is SCCL.
-  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->comm->scclAlgo.nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
   // nstepsPerloop for sccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
   proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;

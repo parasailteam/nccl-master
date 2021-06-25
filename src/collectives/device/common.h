@@ -74,9 +74,9 @@ template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int
 __device__ void ncclKernel(struct ncclWorkElem first)  {
   int tid = threadIdx.x;
   int bid = blockIdx.x;
+
   __shared__ struct ncclShmemData shmem;
   ncclShmem = &shmem;
-
   auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
 
   struct ncclDevComm* comm = first.comm;
@@ -106,6 +106,10 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         }
         __syncthreads();
       }
+
+      if (tid == 0) {
+    printf("78: ALGO %d PROTO %d FINDEX %d w->funcIndex %d\n", ALGO, PROTO, FINDEX, w->funcIndex);
+  }
       
       if (w->funcIndex == FINDEX) {
         f.run(w);
@@ -121,12 +125,14 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
     w = NULL;
   }
 }
-
 // Only generate kernels for SUM
 #if NCCL_OP == 0
 #define IMPL_COLL_KERN(func, algo, proto, redop, type, fIndex) \
 __global__ void NCCL_KERN_NAME(func, algo, proto, redop, type)(struct ncclWorkElem first) { \
-  ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex>(first); \
+  if (threadIdx.x == 0) {\
+    printf("135: ALGO %d PROTO %d\n", NCCL_ALGO_##algo, NCCL_PROTO_##proto);\
+  }\
+  ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex>(first);\
 }
 #else
 #define IMPL_COLL_KERN(func, algo, proto, redop, type, fInded)
