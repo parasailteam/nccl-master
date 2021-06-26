@@ -21,5 +21,6 @@ ncclResult_t ncclEnqueueEvents(struct ncclComm* comm);
 ncclResult_t ncclSaveKernel(struct ncclInfo* info);
 ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info);
 ncclResult_t ncclSaveCommKernels(struct ncclComm* comm);
+ncclResult_t ncclCommScclAlgoFromCustomColl(ncclComm* comm, const ncclCustomColl_t customColl);
 
 #endif // End include guard
