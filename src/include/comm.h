@@ -154,4 +154,10 @@ struct ncclComm {
   int p2pRecvCount;
 };
 
+
+struct ncclCustomColl {
+  struct scclAlgorithm scclAlgo;
+  bool isInit; //Initialized or not.
+};
+
 #endif
