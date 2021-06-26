@@ -283,7 +283,7 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  * Run a SCCL Collective.
  */
 ncclResult_t ncclCustomCollective(ncclCustomColl_t customColl, const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
+    ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 
 /*
  * Group semantics
