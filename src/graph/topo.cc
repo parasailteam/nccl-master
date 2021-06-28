@@ -670,6 +670,23 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
     WARN("Protocol %s is not supported.", protocol);
     return ncclInvalidUsage;
   }
+  const char* redop;
+  NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
+  if (strcmp(redop, "sum") == 0){
+    scclAlgo->redOp = ncclSum;
+  } else if (strcmp(redop, "prod") == 0){
+    scclAlgo->redOp = ncclProd;
+  } else if (strcmp(redop, "max") == 0){
+    scclAlgo->redOp = ncclMax;
+  } else if (strcmp(redop, "min") == 0){
+    scclAlgo->redOp = ncclMin;
+  } else if (strcmp(redop, "nop") == 0){
+    //If algorithm has no reduction operator then use ncclSum.
+    scclAlgo->redOp = ncclSum;
+  } else {
+    WARN("Redop %s is not supported.", redop);
+    return ncclInvalidUsage;
+  }
   scclAlgo->nChannels = globalNChannels;
   scclAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {

@@ -191,6 +191,9 @@ struct scclAlgorithm {
   // declaration for scratchBuffer. This is only to be accessed by the host
   size_t scratchBufferSize;
   void* scratchBuffer;
+  //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
+  //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
+  ncclRedOp_t redOp;
 
   // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
   struct scclFlag* flags;
