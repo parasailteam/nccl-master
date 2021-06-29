@@ -121,11 +121,12 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         // SCCL algorithm has hooks for AllToAll, AllGather and ReduceScatter
         // SCCL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
         for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-          if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter || coll == ncclFuncCustomCollective) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol) {
+          if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol) {
             // Setting the bandwidth and latency values to 1.0 (some arbitrary value) so that they don't get skipped by ncclTopoGetAlgoTime
             comm->bandwidths[coll][a][p] = 1.0;
             comm->latencies[coll][a][p] = 1.0;
           } else {
+            //Set all protocols for NCCL_ALGO_SCCL for ncclFuncCustomCollective because XML is loaded later.
             comm->bandwidths[coll][a][p] = 0.0; // This will make sure that sccl is not selected for any other scenario
             comm->latencies[coll][a][p] = 0.0;
           }
@@ -133,6 +134,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         continue;
       }
 
+      
       if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
       if (coll == ncclFuncCustomCollective) continue;
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
@@ -210,7 +212,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   if (!getenv("SCCL_XML_FILE")){
     algoEnable[NCCL_ALGO_SCCL] = 0;
   }
-
+  printf("215: bw %f %f %f\n", comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][0], comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][1], comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][2]);
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     int pEnable = protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
@@ -220,7 +222,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
     // Only disable algo for Allreduce since others only have one
-    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter || c == ncclFuncAllToAll || c == ncclFuncCustomCollective) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
+    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter || c == ncclFuncAllToAll) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
   }
 
   if (comm->rank == 0) {
@@ -300,6 +302,8 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time) {
   float bw = info->comm->bandwidths[info->coll][algorithm][protocol];
   float lat = info->comm->latencies[info->coll][algorithm][protocol];
+  if (algorithm == NCCL_ALGO_SCCL)
+    printf("algorithm %d protocol %d bw %f\n", algorithm, protocol, bw);
   if (bw == 0) {
     *time = -1.0; return ncclSuccess;
   }

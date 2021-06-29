@@ -327,7 +327,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
     WARN("Error : no algorithm/protocol available");
     return ncclInternalError;
   }
-  //if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
+  if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->nChannels > 0) ? info->nChannels :
@@ -442,7 +442,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->nThreads = info->nThreads;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
-  printf("work->funcIndex %d info->coll %d, info->op %d, info->datatype %d, info->algorithm %d, info->protocol %d\n", work->funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+  printf("work->funcIndex %d info->coll %d, info->op %d, info->datatype %d, info->algorithm %d, info->protocol %d info->count %d\n", work->funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol, info->count);
   printf("ncclKerns elems = %d\n", sizeof(ncclKerns)/sizeof(ncclKerns[0]));
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->chunkSteps : 1;

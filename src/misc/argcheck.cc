@@ -45,7 +45,7 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
   }
   // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P calls to chars.
   info->nBytes = info->count * ncclTypeSize(info->datatype);
-  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast || info->coll == ncclFuncAllToAll || info->coll == ncclFuncCustomCollective) {
+  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast || info->coll == ncclFuncAllToAll) { //|| info->coll == ncclFuncCustomCollective
     info->count = info->nBytes;
     info->datatype = ncclInt8;
   }

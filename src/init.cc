@@ -1138,6 +1138,7 @@ ncclResult_t ncclCustomCollectiveInit(ncclComm_t comm, ncclCustomColl_t* customC
     if ((ret = ncclCommScclAlgoFromCustomColl(comm, *customColl)) != ncclSuccess) {
       return ret;
     }
+    comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][(*customColl)->scclAlgo.protocol] = 1.0f;
   } else {
     TRACE(NCCL_INIT, "SCCL XML is invalid '%s'\n", scclXMLPath);
     return ncclInvalidArgument;

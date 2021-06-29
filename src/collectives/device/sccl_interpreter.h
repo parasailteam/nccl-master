@@ -18,6 +18,8 @@ template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args) {
+      if (threadIdx.x == 0)
+        printf("22:\n");
       struct ncclDevComm* comm = args->comm;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
       const int tid = threadIdx.x;

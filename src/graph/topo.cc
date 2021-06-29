@@ -658,18 +658,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
-  const char* protocol;
-  NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
-  if (strcmp(protocol, "Simple") == 0){
-    scclAlgo->protocol = NCCL_PROTO_SIMPLE;
-  } else if (strcmp(protocol, "LL128") == 0){
-    scclAlgo->protocol = NCCL_PROTO_LL128;
-  } else if (strcmp(protocol, "LL") == 0){
-    scclAlgo->protocol = NCCL_PROTO_LL;
-  } else {
-    WARN("Protocol %s is not supported.", protocol);
-    return ncclInvalidUsage;
-  }
+
   const char* redop;
   NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
   if (strcmp(redop, "sum") == 0){
@@ -687,6 +676,23 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
     WARN("Redop %s is not supported.", redop);
     return ncclInvalidUsage;
   }
+
+  const char* protocol;
+  NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
+  printf("protocol %s\n", protocol);
+  if (strcmp(protocol, "Simple") == 0){
+    scclAlgo->protocol = NCCL_PROTO_SIMPLE;
+  } else if (strcmp(protocol, "LL128") == 0){
+    scclAlgo->protocol = NCCL_PROTO_LL128;
+  } else if (strcmp(protocol, "LL") == 0){
+    scclAlgo->protocol = NCCL_PROTO_LL;
+  } else {
+    WARN("Protocol %s is not supported.", protocol);
+    return ncclInvalidUsage;
+  }
+
+  printf("scclAlgo->protocol %d\n", scclAlgo->protocol);
+
   scclAlgo->nChannels = globalNChannels;
   scclAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {
