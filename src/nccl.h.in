@@ -25,9 +25,6 @@ extern "C" {
 /* Opaque handle to communicator */
 typedef struct ncclComm* ncclComm_t;
 
-/*Opaque handle to custom collective*/
-typedef struct ncclCustomColl* ncclCustomColl_t;
-
 #define NCCL_UNIQUE_ID_BYTES 128
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } ncclUniqueId;
 
@@ -103,11 +100,6 @@ ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
 /* Returns the user-ordered "rank" associated with the communicator. */
 ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
-
-/* Initializes custom collective by parsing SCCL XML */
-ncclResult_t ncclCustomCollectiveInit(ncclComm_t comm, ncclCustomColl_t* customColl, const char* scclXMLPath);
-/* Destroy custom collective */
-ncclResult_t ncclCustomCollDestroy(ncclCustomColl_t customColl);
 
 /* Reduction operation selector */
 typedef enum { ncclSum        = 0,
@@ -285,7 +277,7 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  *
  * Run a SCCL Collective.
  */
-ncclResult_t ncclCustomCollective(ncclCustomColl_t customColl, const void* sendbuff, void* recvbuff, size_t count,
+ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 
 /*

@@ -641,7 +641,7 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
   return ncclSuccess;
 }
 
-ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct ncclCustomColl* customColl, const char* str) {
+ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str) {
   INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
   struct ncclXml* xml;
 
@@ -649,7 +649,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
   NCCLCHECK(scclGetXmlAlgoFromFile(str, xml));
   int rank = comm->rank;
 
-  struct scclAlgorithm* scclAlgo = &customColl->scclAlgo;
+  struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
   // zeroing out all entries.
   memset(scclAlgo, 0, sizeof(struct scclAlgorithm));
   struct ncclXmlNode* topNode;

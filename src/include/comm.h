@@ -157,10 +157,4 @@ struct ncclComm {
   char xmlFile[1024];
 };
 
-
-struct ncclCustomColl {
-  struct scclAlgorithm scclAlgo;
-  bool isInit; //Initialized or not.
-};
-
 #endif

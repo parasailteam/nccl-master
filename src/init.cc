@@ -869,16 +869,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
   
   // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("SCCL_XML_FILE") || comm->xmlFile[0] != 0) {
-    struct ncclCustomColl customColl;
-    
+  if (getenv("SCCL_XML_FILE") || comm->xmlFile[0] != 0) {    
     const char* xmlFile = getenv("SCCL_XML_FILE");
     if (xmlFile == nullptr)
       xmlFile = comm->xmlFile;
 
-    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm, &customColl, xmlFile));
-    // NetSharedBuffers needs to be set for this to work across nodes.
-    comm->scclAlgo = customColl.scclAlgo;
+    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm, xmlFile));
 
     // Connect SCCL graph
     if (comm->nChannels < comm->scclAlgo.nChannels) {
@@ -962,44 +958,6 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUni
 end:
   if (ncclAsyncMode()) return ncclAsyncErrCheck(res);
   else return res;
-}
-
-ncclResult_t ncclCommScclAlgoFromCustomColl(ncclComm* comm, const ncclCustomColl_t customColl) {
-  ncclResult_t ret;
-
-  if (!customColl->isInit) {
-    WARN("Custom Coll not initialized.");
-    return ncclInternalError;
-  }
-
-  // NetSharedBuffers needs to be set for this to work across nodes.
-  comm->scclAlgo = customColl->scclAlgo;
-
-  // Connect SCCL graph
-  if (comm->nChannels < comm->scclAlgo.nChannels) {
-    WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", comm->scclAlgo.nChannels, comm->nChannels, comm->scclAlgo.nChannels);
-    return ncclInvalidUsage;
-  }
-  
-  for (int c=0; c<comm->scclAlgo.nChannels; c++) {
-    struct ncclChannel* channel = comm->channels+c;
-    if (comm->nRanks == 1) continue;
-    struct scclChannelInfo* scclChannel = &comm->scclAlgo.scclChannels[c];
-    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, cleanup);
-  }
-
-  // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
-  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, cleanup);
-  INFO(NCCL_INIT, "Connected SCCL algorithm"); 
-
-  NCCLCHECKGOTO(devCommSetup(comm), ret, cleanup);
-
-  cleanup:
-  if ((comm) && (comm)->bootstrap) bootstrapAbort((comm)->bootstrap);
-  if (ret != ncclSuccess) return ret;
-
-  TRACE(NCCL_INIT, "rank %d nranks %d - DONE", rank, nranks);
-  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclCommInitRank, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
@@ -1160,35 +1118,5 @@ ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank) {
   NCCLCHECK(PtrCheck(comm, "CommUserRank", "comm"));
   NCCLCHECK(PtrCheck(rank, "CommUserRank", "rank"));
   *rank = comm->rank;
-  return ncclSuccess;
-}
-
-NCCL_API(ncclResult_t, ncclCustomCollectiveInit, ncclComm_t comm, ncclCustomColl_t* customColl, const char* scclXMLPath);
-ncclResult_t ncclCustomCollectiveInit(ncclComm_t comm, ncclCustomColl_t* customColl, const char* scclXMLPath) {
-  NVTX3_FUNC_RANGE_IN(nccl_domain);
-  ncclResult_t ret;
-
-  *customColl = (ncclCustomColl_t)malloc(sizeof(ncclCustomColl));
-  (*customColl)->isInit = true;
-  
-  if (scclXMLPath) {
-    if ((ret = scclGetAlgoFromXMLAndSetComm(comm, *customColl, scclXMLPath)) != ncclSuccess) 
-      return ret;
-    if ((ret = ncclCommScclAlgoFromCustomColl(comm, *customColl)) != ncclSuccess) {
-      return ret;
-    }
-    comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][(*customColl)->scclAlgo.protocol] = 1.0f;
-  } else {
-    TRACE(NCCL_INIT, "SCCL XML is invalid '%s'\n", scclXMLPath);
-    return ncclInvalidArgument;
-  }
-
-  return ncclSuccess;
-}
-
-NCCL_API(ncclResult_t, customCollFree, ncclCustomColl_t customColl);
-ncclResult_t customCollFree(ncclCustomColl_t customColl) {
-  free(customColl);
-
   return ncclSuccess;
 }
