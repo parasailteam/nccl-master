@@ -126,7 +126,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
             comm->bandwidths[coll][a][p] = 1.0;
             comm->latencies[coll][a][p] = 1.0;
           } else {
-            //Set all protocols for NCCL_ALGO_SCCL for ncclFuncCustomCollective because XML is loaded later.
+            //Set all protocols for NCCL_ALGO_SCCL for ncclFuncCustomCollective to 0 because XML is loaded later.
             comm->bandwidths[coll][a][p] = 0.0; // This will make sure that sccl is not selected for any other scenario
             comm->latencies[coll][a][p] = 0.0;
           }
@@ -248,7 +248,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
           sprintf(line+strlen(line), "%8.1f/%6.1f |", comm->latencies[c][a][p], comm->bandwidths[c][a][p]);
         }
       }
-
       INFO(NCCL_TUNING, "%s", line);
     }
   }
@@ -302,7 +301,6 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time) {
   float bw = info->comm->bandwidths[info->coll][algorithm][protocol];
   float lat = info->comm->latencies[info->coll][algorithm][protocol];
-  
   if (bw == 0) {
     *time = -1.0; return ncclSuccess;
   }

@@ -327,7 +327,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
     WARN("Error : no algorithm/protocol available");
     return ncclInternalError;
   }
-  if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
+  //if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->nChannels > 0) ? info->nChannels :

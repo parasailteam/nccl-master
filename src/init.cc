@@ -891,7 +891,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
     // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-    INFO(NCCL_INIT, "Connected SCCL algorithm"); 
+    INFO(NCCL_INIT, "Connected SCCL algorithm");
   }
 
   // Compute time models for algorithm and protocol combinations.
@@ -998,7 +998,6 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   return ncclSuccess;
 }
 
-
 NCCL_API(ncclResult_t, ncclCommInitAllWithScclXML, ncclComm_t* comms, int ndev, const int* devlist, const char* xmlFile);
 ncclResult_t ncclCommInitAllWithScclXML(ncclComm_t* comms, int ndev, const int* devlist, const char* xmlFile) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
@@ -1018,8 +1017,6 @@ ncclResult_t ncclCommInitAllWithScclXML(ncclComm_t* comms, int ndev, const int* 
   NCCLCHECK(ncclGroupEnd());
   return ncclSuccess;
 }
-
-
 
 static ncclResult_t commDestroy(ncclComm_t comm) {
   int savedDevice;
