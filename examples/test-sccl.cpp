@@ -271,7 +271,7 @@ float run(int rank, const int64_t size, const ncclDataType_t datatype)
   } else if (collType == ReduceScatter) {
     sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel.xml", comm_size, nChannels);
   } else if (collType == AllReduce) {
-    sprintf(filename, "allreduce_ring_%d_ranks_%d_channel.xml", comm_size, nChannels);
+    sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   }
 
   ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename);
@@ -378,7 +378,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  const int size = 128*1024*1024;
+  const int size = 8192*3072;//128*1024*1024;
   float elapsedTime1 = run<float>(rank, size, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);

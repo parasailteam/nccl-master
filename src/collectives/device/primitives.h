@@ -41,7 +41,7 @@
 // Implementation of primitive types
 template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives {
- private:
+ protected:
   const int tid;
   int nthreads;
   int nworkers;

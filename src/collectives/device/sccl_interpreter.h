@@ -34,7 +34,7 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, scclAlgo->ld, scclAlgo->chunkld};
 
       const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
@@ -49,6 +49,7 @@ class scclFunction {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
+
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
@@ -67,9 +68,28 @@ class scclFunction {
           srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
+
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
+
+            int chunkIdx = sccltran->srcoffset + c;
+            int chunkStartRow = chunkIdx / prims.numRealChunks * prims.realChunkRows;
+            int chunkStartCol = chunkIdx % prims.numRealChunks * prims.realChunkCols;
+            const ssize_t rows = (size * nranks)/prims.ld;
+            int nelem = min(prims.realChunkSize, (size * nranks - (chunkStartRow * prims.ld + (rows - chunkStartRow) * (prims.ld - (prims.ld - chunkStartCol)))));
+            int chunkRows = min(min(nelem/prims.realChunkCols, prims.realChunkRows), rows - chunkStartRow);
+            int chunkCols = prims.realChunkCols;
+            nelem = chunkCols * chunkRows;
+            // prims.nelem = nelem;
+
+            // if (threadIdx.x == 0 && comm->rank == 0) {
+            //   printf("rank %d gridDim.x %d step %d srcOffset %ld sccltran->srcoffset %ld c %d sizePerScclChunk %ld loopSize %ld chunkOffset %ld prims.nelem %d nelem %d\n", comm->rank, gridDim.x, i, srcoffset, (ssize_t)(sccltran->srcoffset), c, sizePerScclChunk, loopSize, chunkOffset, prims.nelem, nelem);
+            // }
+            
+            if (threadIdx.x == 0 && comm->rank == 0) {
+              printf("rank %d prims.realChunkSize %d prims.realChunkCols %d nelem %d\n", comm->rank, prims.realChunkSize, prims.realChunkCols, nelem);
+            }
             int thisCount = min(scclMaxAllowedCount, count-c);
             switch (sccltran->type) {
               case SCCL_SEND:
@@ -106,26 +126,114 @@ class scclFunction {
     }
 };
 
+template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
+class ncclPrimitives2D : public ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC> {
+protected:
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
+  inline __device__ void
+  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset) {
+    //using Bar<T>::_foo_arg;             // Might not work in g++, IIRC
+    int offset = 0;
+    int sliceSize = this->stepSize*SLICESTEPS;
+    int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
+    #pragma unroll
+    for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
+      int realSize = max(0, min(dataSize, nelem-offset));
+      if (this->tid < this->nworkers) {
+        if (SRC && (this->role & ROLE_SRC)) this->srcs[0] = srcPtr+offset;
+        if (RECV && (this->role & ROLE_WAIT_RECV)) this->waitRecv<SRC, DIRECTRECV>(directOffset+offset);
+        if (DST && (this->role & ROLE_DST)) this->dsts[0] = dstPtr+offset;
+        if (SEND && (this->role & ROLE_WAIT_SEND)) this->waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
+        if (realSize > 0) {
+          this->subBarrier();
+          if (DIRECTRECV && this->srcs[0] == this->dsts[0]) {
+            // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
+            if (SEND) {
+              // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
+              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, realSize);
+            }
+          } else {
+            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, realSize);
+          }
+        }
+      }
+      this->barrier();
+      if (SEND && (this->role & ROLE_POST_SEND) && realSize > 0 && this->index == 0) __threadfence_system();
+      __syncwarp();
+      if (SEND && (this->role & ROLE_POST_SEND)) this->postSend();
+      if (RECV && (this->role & ROLE_POST_RECV)) this->postRecv();
+      offset += realSize;
+    }
+  }
+
+public:
+  __device__ __forceinline__
+  ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group):
+    ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group)
+  {}
+  
+  __device__ __forceinline__ void
+  send(const T* src, int nelem) {
+    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  recv(T* dst, int nelem) {
+    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  recvCopySend(T* dst, int nelem) {
+    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  recvReduceCopy(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 1, 0, 1, 1>(src, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  recvReduceSend(const T* src, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  recvReduceCopySend(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 1>(src, dst, nelem, 0);
+  }
+};
+
 template<class FUNC, typename T, int UNROLL>
 struct SimpleWrapper {
   const int nthreads;
   const int stepSize;
   const int chunkSize;
   int nelem;
+  int chunkld;
+  int realChunkCols;
+  int ld;
+  int realChunkRows;
+  int numRealChunks;
+  int realChunkSize;
 
-  ncclPrimitives<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
+  ncclPrimitives2D<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
-  __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
+  __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel,
+                           int ld, int chunkld)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       chunkSize(stepSize * SCCL_CHUNKSTEPS),
+      ld(ld), chunkld(chunkld), realChunkCols(chunkld),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
 
   __device__ size_t initIter(ssize_t sizePerScclChunk, ssize_t gridOffset) {
-    int realChunkSize = min(chunkSize, sizePerScclChunk-gridOffset);
+    realChunkSize = min(chunkSize, sizePerScclChunk-gridOffset);
     ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
     ssize_t chunkOffset = gridOffset;
     nelem = min(realChunkSize, sizePerScclChunk-chunkOffset);
+    realChunkRows = realChunkSize/realChunkCols;
+    numRealChunks = ld/realChunkCols;
+
     return chunkOffset;
   }
 
@@ -164,10 +272,15 @@ struct LL128Wrapper {
   ssize_t chunkSize;
   const ssize_t minChunkSize;
   int nelem;
-
+  int chunkld;
+  int ld;
+  int realChunkRows;
+  int realChunkCols;
+  int numRealChunks;
+  int realChunkSize;
   ncclLL128Primitives<T, FUNC, 1, 1> prims;
 
-  __device__ LL128Wrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
+  __device__ LL128Wrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel, int ld, int chunkld)
     : stepSize(args->comm->buffSizes[NCCL_PROTO_LL128] / (sizeof(uint64_t)*NCCL_STEPS)),
       chunkSize(stepSize*NCCL_LL128_DATAELEMS*sizeof(uint64_t) / (NCCL_LL128_LINEELEMS*sizeof(T))),
       minChunkSize((NCCL_LL128_SHMEM_ELEMS_PER_THREAD*args->nThreads*NCCL_LL128_DATAELEMS*sizeof(uint64_t))/(NCCL_LL128_LINEELEMS*sizeof(T))/2),
@@ -213,10 +326,15 @@ struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
   int nelem;
-  
+  int chunkld;
+  int ld;
+  int realChunkRows;
+  int realChunkCols;
+  int numRealChunks;
+  int realChunkSize;
   ncclLLPrimitives<T, FUNC, 1, 1> prims;
 
-  __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
+  __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel, int ld, int chunkld)
     : stepLines(args->comm->buffSizes[NCCL_PROTO_LL] / (sizeof(union ncclLLFifoLine)*NCCL_STEPS)),
       chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)),
       prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm) {}

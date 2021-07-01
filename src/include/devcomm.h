@@ -200,6 +200,10 @@ struct scclAlgorithm {
   struct scclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
+  //Size of the leading dimension of the array
+  int ld;
+  //Size of the leading dimension of the chunk
+  int chunkld;
 };
 
 #define NCCL_MAX_TREE_ARITY 3

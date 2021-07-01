@@ -209,8 +209,8 @@ template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args);
+      // scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
+      // scclfunc.run(args);
     }
 };
 
@@ -218,8 +218,8 @@ template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args);
+      // scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
+      // scclfunc.run(args);
     }
 };
 
@@ -227,7 +227,8 @@ template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args);
+      //TODO: 
+      // scclFunctionLL<FUNC, T, UNROLL> scclfunc;
+      // scclfunc.run(args);
     }
 };
