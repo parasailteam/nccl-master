@@ -679,7 +679,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
 
   const char* protocol;
   NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
-  printf("protocol %s\n", protocol);
   if (strcmp(protocol, "Simple") == 0){
     scclAlgo->protocol = NCCL_PROTO_SIMPLE;
   } else if (strcmp(protocol, "LL128") == 0){
@@ -690,8 +689,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
     WARN("Protocol %s is not supported.", protocol);
     return ncclInvalidUsage;
   }
-
-  printf("scclAlgo->protocol %d\n", scclAlgo->protocol);
 
   scclAlgo->nChannels = globalNChannels;
   scclAlgo->nchunksPerLoop  = nchunksPerLoop;
@@ -806,7 +803,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
                 sccltran->count = count;
                 int hasSend = 0;
                 int hasRecv = 0;
-                if (strcmp(type, "s") == 0){
+                if (strcmp(type, "s") == 0) {
                   sccltran->type = SCCL_SEND;
                   hasSend = 1;
                 } else if (strcmp(type, "r") == 0) {
@@ -823,6 +820,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(const struct ncclComm* comm, struct nc
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
+                } else if (strcmp(type, "rrcs") == 0) {
+                  sccltran->type = SCCL_RECV_REDUCE_COPY_SEND;
+                  hasRecv = 1;
+                  hasSend = 1;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {

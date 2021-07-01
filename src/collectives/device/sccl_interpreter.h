@@ -18,8 +18,6 @@ template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      if (threadIdx.x == 0)
-        printf("22:\n");
       struct ncclDevComm* comm = args->comm;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
       const int tid = threadIdx.x;
@@ -86,6 +84,9 @@ class scclFunction {
               case SCCL_RECV_REDUCE_SEND:
                 prims.recvReduceSend(srcPointer + srcoffset, thisCount);
                 break;
+              case SCCL_RECV_REDUCE_COPY_SEND:
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
@@ -147,6 +148,10 @@ struct SimpleWrapper {
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+  
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -194,6 +199,10 @@ struct LL128Wrapper {
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
+
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -237,6 +246,10 @@ struct LLWrapper {
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
+  
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>

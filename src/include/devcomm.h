@@ -129,7 +129,8 @@ struct ncclRing {
 #define SCCL_RECV_COPY_SEND 2
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
-#define SCCL_NO_OP 5
+#define SCCL_RECV_REDUCE_COPY_SEND 5
+#define SCCL_NO_OP 6
 
 // TODO: compress this by a lot!
 struct scclTransfer {

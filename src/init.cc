@@ -210,7 +210,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   return ncclSuccess;
 }
 
-static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
+static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, const char* xmlFile) {
   if (ndev < 1) {
     WARN("invalid device count (%d) requested", ndev);
     return ncclInvalidArgument;
@@ -266,6 +266,10 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
   // Mark channels as non initialized.
   for (int c=0; c<MAXCHANNELS; c++) comm->channels[c].id = -1;
+
+  memset(comm->xmlFile, 0, sizeof(comm->xmlFile));
+  if (xmlFile)
+    strcpy(&comm->xmlFile[0], xmlFile);
 
   *comret = comm;
   return ncclSuccess;
@@ -324,7 +328,6 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 }
 
 static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank, int nranks, int* ringRanks) {
-  TRACE(NCCL_INIT, "rank %d nranks %d", rank, nranks);
   NCCLCHECK(initChannel(comm, channelId));
 
   struct ncclRing* ring = &comm->channels[channelId].ring;
@@ -864,12 +867,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-
+  
   // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("SCCL_XML_FILE")) {
+  if (getenv("SCCL_XML_FILE") || comm->xmlFile[0] != 0) {
     struct ncclCustomColl customColl;
+    
+    const char* xmlFile = getenv("SCCL_XML_FILE");
+    if (xmlFile == nullptr)
+      xmlFile = comm->xmlFile;
 
-    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm, &customColl, getenv("SCCL_XML_FILE")));
+    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm, &customColl, xmlFile));
     // NetSharedBuffers needs to be set for this to work across nodes.
     comm->scclAlgo = customColl.scclAlgo;
 
@@ -909,11 +916,11 @@ affinity_restore:
   return ncclSuccess;
 }
 
-ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev) {
+ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev, const char* xmlFile) {
   ncclResult_t res;
 
   CUDACHECK(cudaSetDevice(cudaDev));
-  NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank), res, cleanup);
+  NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank, xmlFile), res, cleanup);
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, cleanup);
   NCCLCHECKGOTO(devCommSetup(*newcomm), res, cleanup);
 
@@ -926,7 +933,7 @@ cleanup:
   return res;
 }
 
-static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev) {
+static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev, const char* xmlFile) {
   ncclResult_t res;
   char* env = getenv("NCCL_COMM_ID");
   if (env && myrank == 0) {
@@ -948,9 +955,9 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUni
   }
 
   if (ncclAsyncMode()) {
-    NCCLCHECKGOTO(ncclAsyncInit(ncclCommInitRankSync, newcomm, nranks, commId, myrank, cudaDev), res, end);
+    NCCLCHECKGOTO(ncclAsyncInit(ncclCommInitRankSync, newcomm, nranks, commId, myrank, cudaDev, xmlFile), res, end);
   } else {
-    NCCLCHECKGOTO(ncclCommInitRankSync(newcomm, nranks, commId, myrank, cudaDev), res, end);
+    NCCLCHECKGOTO(ncclCommInitRankSync(newcomm, nranks, commId, myrank, cudaDev, xmlFile), res, end);
   }
 end:
   if (ncclAsyncMode()) return ncclAsyncErrCheck(res);
@@ -1000,7 +1007,16 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   int cudaDev;
   CUDACHECK(cudaGetDevice(&cudaDev));
-  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev));
+  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, nullptr));
+  return ncclSuccess;
+}
+
+NCCL_API(ncclResult_t, ncclCommInitRankWithScclXML, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile);
+ncclResult_t ncclCommInitRankWithScclXML(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile) {
+  NVTX3_FUNC_RANGE_IN(nccl_domain);
+  int cudaDev;
+  CUDACHECK(cudaGetDevice(&cudaDev));
+  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, xmlFile));
   return ncclSuccess;
 }
 
@@ -1018,11 +1034,34 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   NCCLCHECK(ncclGroupStart());
   for (int i=0; i<ndev; i++) {
     // Ignore return codes .. we need to call ncclGroupEnd to clean up anyway
-    ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i);
+    ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i, nullptr);
   }
   NCCLCHECK(ncclGroupEnd());
   return ncclSuccess;
 }
+
+
+NCCL_API(ncclResult_t, ncclCommInitAllWithScclXML, ncclComm_t* comms, int ndev, const int* devlist, const char* xmlFile);
+ncclResult_t ncclCommInitAllWithScclXML(ncclComm_t* comms, int ndev, const int* devlist, const char* xmlFile) {
+  NVTX3_FUNC_RANGE_IN(nccl_domain);
+  NCCLCHECK(PtrCheck(comms, "CommInitAll", "comms"));
+  if (ndev < 0) {
+    WARN("Invalid device count requested : %d", ndev);
+    return ncclInvalidArgument;
+  }
+
+  ncclUniqueId uniqueId;
+  NCCLCHECK(ncclGetUniqueId(&uniqueId));
+  NCCLCHECK(ncclGroupStart());
+  for (int i=0; i<ndev; i++) {
+    // Ignore return codes .. we need to call ncclGroupEnd to clean up anyway
+    ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i, xmlFile);
+  }
+  NCCLCHECK(ncclGroupEnd());
+  return ncclSuccess;
+}
+
+
 
 static ncclResult_t commDestroy(ncclComm_t comm) {
   int savedDevice;

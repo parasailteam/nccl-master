@@ -212,7 +212,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   if (!getenv("SCCL_XML_FILE")){
     algoEnable[NCCL_ALGO_SCCL] = 0;
   }
-  printf("215: bw %f %f %f\n", comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][0], comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][1], comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][2]);
+
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     int pEnable = protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
@@ -302,8 +302,7 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time) {
   float bw = info->comm->bandwidths[info->coll][algorithm][protocol];
   float lat = info->comm->latencies[info->coll][algorithm][protocol];
-  if (algorithm == NCCL_ALGO_SCCL)
-    printf("algorithm %d protocol %d bw %f\n", algorithm, protocol, bw);
+  
   if (bw == 0) {
     *time = -1.0; return ncclSuccess;
   }

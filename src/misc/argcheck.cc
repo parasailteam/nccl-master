@@ -50,7 +50,7 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
     info->datatype = ncclInt8;
   }
   
-  if (info->coll == ncclFuncAllToAll || info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter || info->coll == ncclFuncCustomCollective) info->nBytes *= info->comm->nRanks; // count is per rank
+  if (info->coll == ncclFuncAllToAll || info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) info->nBytes *= info->comm->nRanks; // count is per rank || info->coll == ncclFuncCustomCollective
 
   if (info->op < 0 || info->op >= ncclNumOps) {
     WARN("%s : invalid reduction operation %d", info->opName, info->op);

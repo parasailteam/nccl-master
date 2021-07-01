@@ -152,6 +152,9 @@ struct ncclComm {
   struct ncclP2Plist* p2pRecvs;
   int p2pSendCount;
   int p2pRecvCount;
+
+  //Custom Collective information
+  char xmlFile[1024];
 };
 
 

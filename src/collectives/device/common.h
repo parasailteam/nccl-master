@@ -106,11 +106,6 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         }
         __syncthreads();
       }
-
-      if (tid == 0) {
-    printf("78: ALGO %d PROTO %d FINDEX %d w->funcIndex %d\n", ALGO, PROTO, FINDEX, w->funcIndex);
-  }
-      
       if (w->funcIndex == FINDEX) {
         f.run(w);
       } else {
@@ -129,9 +124,6 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 #if NCCL_OP == 0
 #define IMPL_COLL_KERN(func, algo, proto, redop, type, fIndex) \
 __global__ void NCCL_KERN_NAME(func, algo, proto, redop, type)(struct ncclWorkElem first) { \
-  if (threadIdx.x == 0) {\
-    printf("135: ALGO %d PROTO %d\n", NCCL_ALGO_##algo, NCCL_PROTO_##proto);\
-  }\
   ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex>(first);\
 }
 #else

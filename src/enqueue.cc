@@ -442,8 +442,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->nThreads = info->nThreads;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
-  printf("work->funcIndex %d info->coll %d, info->op %d, info->datatype %d, info->algorithm %d, info->protocol %d info->count %d\n", work->funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol, info->count);
-  printf("ncclKerns elems = %d\n", sizeof(ncclKerns)/sizeof(ncclKerns[0]));
+
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->chunkSteps : 1;
   int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->sliceSteps : 1;
@@ -716,6 +715,9 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
+  if (info->coll == ncclFuncCustomCollective) {
+    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgo.protocol] = 1.0f;
+  }
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;
