@@ -411,4 +411,150 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
+//2D
+template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST>
+__device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw, const int t,
+    int nsrcs, const T** s, int ndsts, T** d, 
+    const uint64_t linearStartOffset, const uint64_t chunkStartRow, const uint64_t chunkStartCol, int chunkRows, int chunkCols,
+    const size_t matrixRows, const size_t matrixCols,
+    const int elemOffset, const int Npack) {
+  const int inc = nw * UNROLL * WARP_SIZE;
+  int offset = w * UNROLL * WARP_SIZE + t;
+
+  const Pack128* srcs[MAXSRCS];
+  for (int i=0; i<MAXSRCS; i++) srcs[i] = ((const Pack128*)(s[i]+elemOffset))+offset;
+  Pack128* dsts[MAXDSTS];
+  for (int i=0; i<MAXDSTS; i++) dsts[i] = ((Pack128*)(d[i]+elemOffset))+offset;
+
+  while (offset < Npack) {
+    Pack128 vals[UNROLL];
+    // Load and reduce
+    if (SRC) {
+      for (int u = 0; u < UNROLL; ++u) {
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+        const int chunkElemRow = chunkElemOffset / chunkCols;
+        const int chunkElemCol = chunkElemOffset % chunkCols;
+        size_t idx = (chunkStartRow + chunkElemRow) * matrixCols + (chunkStartCol + chunkElemCol);
+        if (idx >= 8192 * 1024) {
+          printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", __LINE__, idx, linearStartOffset, chunkElemOffset, chunkStartRow, chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        }
+        if (idx == 0) {
+          float* f = (float*)(const Pack128*)(s[0]+idx);
+          printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        }
+        Fetch128(vals[u], (const Pack128*)(s[0]+idx));
+      }
+    } else {
+      for (int u = 0; u < UNROLL; ++u) Fetch128(vals[u], srcs[0]+u*WARP_SIZE);
+    }
+
+    #pragma unroll
+    for (int i=1; i<MINSRCS; i++) {
+      Pack128 vals2[UNROLL];
+      for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+      for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+    }
+    #pragma unroll
+    for (int i=MINSRCS; i<MAXSRCS; i++) {
+      if (i<nsrcs) {
+        Pack128 vals2[UNROLL];
+        for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+        for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+      }
+    }
+
+    // Store
+    if (DST) {
+      for (int u = 0; u < UNROLL; ++u) {
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+        const int chunkElemRow = chunkElemOffset / chunkCols;
+        const int chunkElemCol = chunkElemOffset % chunkCols;
+        size_t idx = ((chunkStartRow + chunkElemRow) * matrixCols + (chunkStartCol + chunkElemCol));
+        if (idx == 0) {
+          float* f = (float*)(&vals[u]);
+          printf("474: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        }
+        Store128((Pack128*)(d[0]+idx), vals[u]);
+      }
+    }
+    #pragma unroll
+    for (int i = DST; i < MINDSTS; i++) {
+      for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+    }
+    #pragma unroll
+    for (int i=MINDSTS; i<MAXDSTS; i++) {
+      if (i<ndsts) {
+        for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+      }
+    }
+    for (int i=0; i<MAXSRCS; i++) srcs[i] += inc;
+    for (int i=0; i<MAXDSTS; i++) dsts[i] += inc;
+    offset += inc;
+  }
+}
+
+template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST>
+__device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nthreads,
+    int nsrcs, const T** srcs, int ndsts, T** dsts, 
+    const uint64_t linearStartOffset, const uint64_t chunkStartRow, const uint64_t chunkStartCol, int chunkRows, int chunkCols,
+    const size_t matrixRows, const size_t matrixCols, int N) {
+  int Nrem = N;
+  if (Nrem <= 0) return;
+
+  int w = tid / WARP_SIZE;       // Warp number
+  int nw = nthreads / WARP_SIZE; // Number of warps
+  int t = tid % WARP_SIZE;       // Thread (inside the warp)
+
+  // Check that all is 16B aligned. If not don't use 16B load/stores.
+  int align = 0;
+  #pragma unroll
+  for (int i=0; i<MINSRCS; i++) align |= ptrAlign128(srcs[i]);
+  for (int i=MINSRCS; i<MAXSRCS && i<nsrcs; i++) align |= ptrAlign128(srcs[i]);
+  #pragma unroll
+  for (int i=0; i<MINDSTS; i++) align |= ptrAlign128(dsts[i]);
+  for (int i=MINDSTS; i<MAXDSTS && i<ndsts; i++) align |= ptrAlign128(dsts[i]);
+
+  int offset = 0;
+  if (align == 0) {
+    // fast path: use 128b loads/stores to do the bulk of the work,
+    // assuming the pointers we have are all 128-bit aligned.
+
+    // main loop
+    int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
+    int Nelem = Npack * PACKELEMS;
+
+    ReduceCopy128bMulti2D<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, chunkStartRow, chunkStartCol, chunkRows, chunkCols, matrixRows, matrixCols, offset, Npack);
+
+    Nrem -= Nelem;
+    if (Nrem == 0) return;
+    offset += Nelem;
+
+    // slightly less optimized for section when we don't have full unrolling
+    Npack = Nrem / PACKELEMS;
+    Nelem = Npack * PACKELEMS;
+
+    ReduceCopy128bMulti2D<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, chunkStartRow, chunkStartCol, chunkRows, chunkCols, matrixRows, matrixCols, offset, Npack);
+
+    Nrem -= Nelem;
+    if (Nrem == 0) return;
+    offset += Nelem;
+    return;
+  }
+
+  printf("535: PANIC!! Should not be here\n");
+  // unrolled, by-type (mostly for unaligned buffers)
+  int Nelem = (Nrem / (UNROLL*PACKELEMS/2*WARP_SIZE)) * (UNROLL*PACKELEMS/2*WARP_SIZE); // round down
+
+  //ReduceCopyMulti<FUNC, T, UNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nelem);
+
+  Nrem -= Nelem;
+  if (Nrem == 0) return;
+  offset += Nelem;
+
+  // no unroll, by type. Should finish what's remaining.
+  //ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
+}
+
 #endif // COMMON_KERNEL_H_

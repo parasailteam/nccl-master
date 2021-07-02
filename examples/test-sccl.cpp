@@ -81,7 +81,7 @@ bool check_sccl_allreduce(const uint64_t size,
     MPI_Allreduce(h_minibatch_gradients, h_reduced_grad_mpi, size, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   for (uint64_t i = 0; i < size; i++) {
     if (not eqFloat(h_reduced_grad_mpi[i], h_reduced_grad[i])) {
-      printf ("Mismatch in h_reduced_grad at '%d': ref '%f' computed '%f', h_minibatch_gradients '%f'\n", i, h_reduced_grad_mpi[i], h_reduced_grad[i], h_minibatch_gradients[i]);
+      printf ("[%d] Mismatch in h_reduced_grad at '%d': ref '%f' computed '%f', h_minibatch_gradients '%f'\n", rank, i, h_reduced_grad_mpi[i], h_reduced_grad[i], h_minibatch_gradients[i]);
       passed = false;
       break;
     }
@@ -216,6 +216,20 @@ void memset_value(T*f, T v, size_t nelems)
   CUDACHECK(cudaMemcpy(f, h_buff, sizeof(T)*nelems, cudaMemcpyHostToDevice));
   free(h_buff);
 }
+
+template<class T>
+void memset_identity(T*f, size_t nelems) 
+{
+  T* h_buff = (T*)malloc(sizeof(T)*nelems);
+
+  for (uint64_t i = 0; i < nelems; i++) {
+    h_buff[i] = (T)(i);
+  }
+
+  CUDACHECK(cudaMemcpy(f, h_buff, sizeof(T)*nelems, cudaMemcpyHostToDevice));
+  free(h_buff);
+}
+
 template<class T>
 float run(int rank, const int64_t size, const ncclDataType_t datatype)
 {
@@ -249,8 +263,9 @@ float run(int rank, const int64_t size, const ncclDataType_t datatype)
     memset_value(minibatch_gradients, (float)(1<<rank), size/comm_size);
   } else if (collType == ReduceScatter || collType == AllReduce) {
     // minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
-    memset_value(minibatch_gradients, (float)(1<<rank), size);
+    //memset_value(minibatch_gradients, (float)(1<<rank), size);
     cudaMemRandInt(minibatch_gradients, size);
+    //memset_identity(minibatch_gradients, size);
   }
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
@@ -378,7 +393,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  const int size = 8192*3072;//128*1024*1024;
+  const int size = 1024*1024;//8192*1024;//128*1024*1024;
   float elapsedTime1 = run<float>(rank, size, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);
