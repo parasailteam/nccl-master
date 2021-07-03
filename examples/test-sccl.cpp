@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  const int size = 1024*1024;//8192*1024;//128*1024*1024;
+  const int size = 8192*1024;//8192*1024;//128*1024*1024;
   float elapsedTime1 = run<float>(rank, size, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);
