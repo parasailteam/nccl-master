@@ -180,8 +180,8 @@ class scclFunction2D {
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, scclAlgo->ld, rows, scclAlgo->chunkld};
       
-      const ssize_t loopSize = (ssize_t)prims.chunkSize;
-      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      const ssize_t sizePerScclChunk = (ssize_t)prims.chunkSize;
+      const ssize_t loopSize = sizePerScclChunk * scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -189,8 +189,8 @@ class scclFunction2D {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
+      for (ssize_t gridOffset = 0, iter = 0; gridOffset < size*nranks; gridOffset += loopSize, iter++) {
+        size_t chunkOffset = prims.initIter(size*nranks, gridOffset);
         const int gridOffsetStartRow = gridOffset / scclAlgo->ld;
 
         ssize_t srcoffset, dstoffset;
@@ -321,8 +321,8 @@ protected:
             // if (DST && !dstBlock.isValid()) {
             //   printf("isValid %d (%ld %ld %d %d) SRC %d realSize %d\n", dstBlock.isValid(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols, SRC, realSize);
             // }
-            //ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D<T>>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
-            //offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+            ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D<T>>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+            offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
           }
         }
       }
