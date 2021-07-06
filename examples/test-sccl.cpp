@@ -337,8 +337,8 @@ float run(int rank, const int64_t size, const ncclDataType_t datatype)
       CUDACHECK(cudaStreamSynchronize(s));
       assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
     } else if (collType == AllReduce) {
-      NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-              (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+      NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+              (void*)allreduced_gradient, 1024, size/comm_size, datatype, comm, s));
 
       CUDACHECK(cudaStreamSynchronize(s));
       assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  const int size = 8192*1024;//8192*1024;//128*1024*1024;
+  const int size = 6*1024*1024;//8192*1024;//128*1024*1024;
   float elapsedTime1 = run<float>(rank, size, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);

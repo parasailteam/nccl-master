@@ -34,7 +34,7 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, scclAlgo->ld, scclAlgo->chunkld};
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, 1024, scclAlgo->chunkld};
 
       const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
@@ -49,7 +49,7 @@ class scclFunction {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
-        const int gridOffsetStartRow = gridOffset / scclAlgo->ld;
+        const int gridOffsetStartRow = gridOffset / prims.ld;
 
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
@@ -176,9 +176,12 @@ class scclFunction2D {
 
       const int nranks = comm->nRanks;
       const ssize_t size = args->coll.count;
-      const ssize_t rows = (size * nranks)/scclAlgo->ld;
-
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, scclAlgo->ld, rows, scclAlgo->chunkld};
+      const ssize_t ld = args->ld;
+      const ssize_t rows = (size * nranks)/ld;
+      if (threadIdx.x == 0) {
+        printf("ld %ld\n", ld);
+      }
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, scclAlgo->chunkld};
       
       const ssize_t sizePerScclChunk = (ssize_t)prims.chunkSize;
       const ssize_t loopSize = sizePerScclChunk * scclAlgo->nchunksPerLoop;
@@ -191,7 +194,7 @@ class scclFunction2D {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < size*nranks; gridOffset += loopSize, iter++) {
         const size_t chunkOffset = prims.initIter(size*nranks, gridOffset);
-        const ssize_t gridOffsetStartRow = gridOffset / scclAlgo->ld;
+        const ssize_t gridOffsetStartRow = gridOffset / ld;
 
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;

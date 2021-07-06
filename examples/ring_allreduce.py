@@ -1,5 +1,5 @@
-num_gpus = 4
-nchannels = 16
+num_gpus = 2
+nchannels = 6
 num_chunks = num_gpus * nchannels # 96
 num_chunks_ring = num_chunks    # 48
 def ring_16():
