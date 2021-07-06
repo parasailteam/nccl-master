@@ -282,7 +282,7 @@ float run(int rank, const int64_t size, const ncclDataType_t datatype)
   char filename[256] = {0};
 
   if (collType == AllGather) {
-    sprintf(filename, "allgather_ring_%d_ranks_%d_channel.xml", comm_size, nChannels);
+    sprintf(filename, "allgather_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   } else if (collType == ReduceScatter) {
     sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel.xml", comm_size, nChannels);
   } else if (collType == AllReduce) {

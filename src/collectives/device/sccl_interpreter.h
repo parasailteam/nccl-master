@@ -136,8 +136,8 @@ struct Block2D {
   int chunkRows;
   int chunkCols;
 
-  __device__ Block2D(const size_t size, const int chunkIdx, const int realChunkSize, const int numRealChunks, const int realChunkRows, const int realChunkCols, const size_t ld, const int gridOffsetStartRow) {
-    size_t rows = size/ld;
+  __device__ Block2D(const ssize_t size, const int chunkIdx, const int realChunkSize, const int numRealChunks, const int realChunkRows, const int realChunkCols, const int ld, const ssize_t gridOffsetStartRow) {
+    ssize_t rows = size/ld;
     chunkStartRow = gridOffsetStartRow + chunkIdx / numRealChunks * realChunkRows;
     chunkStartCol = chunkIdx % numRealChunks * realChunkCols;
     int nelem = min((ssize_t)realChunkSize, (size - (chunkStartRow * ld + (rows - chunkStartRow) * (ld - (ld - chunkStartCol)))));
@@ -190,8 +190,8 @@ class scclFunction2D {
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < size*nranks; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(size*nranks, gridOffset);
-        const int gridOffsetStartRow = gridOffset / scclAlgo->ld;
+        const size_t chunkOffset = prims.initIter(size*nranks, gridOffset);
+        const ssize_t gridOffsetStartRow = gridOffset / scclAlgo->ld;
 
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
@@ -216,7 +216,6 @@ class scclFunction2D {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
 
-            /**TODO: Add following code inside either GenericOp or SimpleWrapper2D*/
             Block2D<T> srcChunk2D = Block2D<T>(size*nranks, sccltran->srcoffset + c, prims.realChunkSize, prims.numRealChunks, prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
             Block2D<T> dstChunk2D = Block2D<T>(size*nranks, sccltran->dstoffset + c, prims.realChunkSize, prims.numRealChunks, prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
 
@@ -244,6 +243,7 @@ class scclFunction2D {
             }
 
             if (srcChunk2D.chunkRows != chunkRows) {
+              printf("235: srcChunk2D.chunkStartRow %ld chunkStartRow %d\n", srcChunk2D.chunkStartRow, chunkStartRow);
               printf("242: srcChunk2D.chunkRows %ld chunkRows %d\n", srcChunk2D.chunkRows, chunkRows);
             }
             // if (threadIdx.x == 0) {
@@ -257,10 +257,10 @@ class scclFunction2D {
                 break;
               case SCCL_RECV:
               
-            if (!dstChunk2D.isValid()) {
-                printf("204: step %d rank %d loopSize %ld gridOffset %ld chunkIdx %d prims.realChunkSize %d prims.realChunkCols %d prims.realChunkRows %d nelem %d dstoffset %ld (%ld %ld %d %d) nelem %d \n",
-                 i, comm->rank, loopSize, gridOffset, sccltran->dstoffset + c, prims.realChunkSize, prims.realChunkCols, prims.realChunkRows, nelem, dstoffset, dstChunk2D.chunkStartRow, dstChunk2D.chunkStartCol, dstChunk2D.chunkRows, dstChunk2D.chunkCols, prims.nelem);
-            }
+            // if (!dstChunk2D.isValid()) {
+            //     printf("204: step %d rank %d loopSize %ld gridOffset %ld chunkIdx %d prims.realChunkSize %d prims.realChunkCols %d prims.realChunkRows %d nelem %d dstoffset %ld (%ld %ld %d %d) nelem %d \n",
+            //      i, comm->rank, loopSize, gridOffset, sccltran->dstoffset + c, prims.realChunkSize, prims.realChunkCols, prims.realChunkRows, nelem, dstoffset, dstChunk2D.chunkStartRow, dstChunk2D.chunkStartCol, dstChunk2D.chunkRows, dstChunk2D.chunkCols, prims.nelem);
+            // }
                 prims.recv(dstPointer, dstChunk2D, dstoffset, thisCount);
                 break;
               case SCCL_RECV_COPY_SEND:
@@ -412,27 +412,27 @@ struct SimpleWrapper2D {
   }
 
   __device__ void send(T * src, Block2D<T> srcBlock, int offset, int count) {
-    prims.send(src, srcBlock, offset, nelem*count);
+    prims.send(src, srcBlock, offset, srcBlock.nelem()*count);
   }
 
   __device__ void recv(T * dst, Block2D<T> dstBlock, int offset, int count) {
-    prims.recv(dst, dstBlock, offset, nelem*count);
+    prims.recv(dst, dstBlock, offset, dstBlock.nelem()*count);
   }
 
   __device__ void recvCopySend(T * dst, Block2D<T> dstBlock, int offset, int count) {
-    prims.recvCopySend(dst, dstBlock, offset, nelem*count);
+    prims.recvCopySend(dst, dstBlock, offset, dstBlock.nelem()*count);
   }
   
   __device__ void recvReduceSend(T * src, Block2D<T> srcBlock, int offset, int count) {
-    prims.recvReduceSend(src, srcBlock, offset, nelem*count);
+    prims.recvReduceSend(src, srcBlock, offset, srcBlock.nelem()*count);
   }
 
   __device__ void recvReduceCopy(T * src, T * dst, Block2D<T> srcBlock, Block2D<T> dstBlock, int offset, int count) {
-    prims.recvReduceCopy(src, dst, srcBlock, dstBlock, offset, nelem*count);
+    prims.recvReduceCopy(src, dst, srcBlock, dstBlock, offset, dstBlock.nelem()*count);
   }
   
   __device__ void recvReduceCopySend(T * src, T * dst, Block2D<T> srcBlock, Block2D<T> dstBlock, int offset, int count) {
-    prims.recvReduceCopySend(src, dst, srcBlock, dstBlock, offset, nelem*count);
+    prims.recvReduceCopySend(src, dst, srcBlock, dstBlock, offset, dstBlock.nelem()*count);
   }
 };
 
