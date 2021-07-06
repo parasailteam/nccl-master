@@ -186,7 +186,8 @@ class scclFunction2D {
       const ssize_t sizePerScclChunk = (ssize_t)prims.chunkSize;
       const ssize_t loopSize = sizePerScclChunk * scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
-
+      if (threadIdx.x == 0)
+        printf("chunkSize %ld loopSize %ld\n", prims.chunkSize, loopSize);
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;

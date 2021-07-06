@@ -441,7 +441,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->coll.nChannels = info->nChannels;
   work->nThreads = info->nThreads;
   work->ld = info->ld;
-  
+
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
@@ -499,7 +499,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   // SCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
   if (info->algorithm == NCCL_ALGO_SCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
     WARN("SCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
-    return ncclInvalidUsage;
+    // return ncclInvalidUsage;
   }
   proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
   work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;

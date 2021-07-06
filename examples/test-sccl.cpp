@@ -242,7 +242,7 @@ float run(int rank, const int64_t size, const ncclDataType_t datatype)
   //The whole dataset is divided into several minibatches, with one minibatch assigned to one gpu.
   //The gradients are received from each gpu, then reduced, and weights are updated as:
   //w = w - alpha * g
-
+  if (rank == 0) printf("size %d\n", size);
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
   CollType collType = AllReduce;
   const int epochs = 1000;
@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  const int size = 6*1024*1024;//8192*1024;//128*1024*1024;
+  const int size = 8*1024*1024;//8192*1024;//128*1024*1024;
   float elapsedTime1 = run<float>(rank, size, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);
