@@ -303,10 +303,10 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
 
   MPI_Barrier(MPI_COMM_WORLD);
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
-    // #define ALLREDUCE
+  // #define ALLREDUCE
 
-  int warmup = 1;
-  for (int iter = 0; iter < 1; iter++) {
+  int warmup = 10;
+  for (int iter = 0; iter < warmup; iter++) {
   #ifdef ALLREDUCE
     NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
             (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
@@ -343,7 +343,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
               (void*)allreduced_gradient, N, size/comm_size, datatype, comm, s));
 
       CUDACHECK(cudaStreamSynchronize(s));
-      assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+      if (iter==0) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
     }
   #endif
   }

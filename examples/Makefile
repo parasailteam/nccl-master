@@ -29,7 +29,7 @@ test-sccl-4-run-16-channels: test-sccl
 	mpirun -np 4 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=16 -x NCCL_MAX_NCHANNELS=16 ./test-sccl
 
 test-sccl-16-run-12-channels: test-sccl
-	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=12 -x NCCL_MAX_NCHANNELS=12 ./test-sccl
+	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=12 -x NCCL_MAX_NCHANNELS=12 nvprof ./test-sccl
 
 test-sccl-16-run-16-channels: test-sccl
 	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=16 -x NCCL_MAX_NCHANNELS=16 ./test-sccl
