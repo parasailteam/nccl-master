@@ -415,7 +415,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
 __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw, const int t,
     int nsrcs, const T** s, int ndsts, T** d, 
-    const uint64_t linearStartOffset, const Block2D& srcBlock, const Block2D& dstBlock,
+    const uint64_t linearStartOffset, const Block2D* srcBlock, const Block2D* dstBlock,
     const size_t matrixRows, const size_t matrixCols,
     const int elemOffset, const int Npack) {
   const int inc = nw * UNROLL * WARP_SIZE;
@@ -433,9 +433,9 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
-        const int chunkElemRow = chunkElemOffset / srcBlock.chunkCols;
-        const int chunkElemCol = chunkElemOffset % srcBlock.chunkCols;
-        ssize_t idx = (srcBlock.chunkStartRow + chunkElemRow) * matrixCols + (srcBlock.chunkStartCol + chunkElemCol);
+        const int chunkElemRow = chunkElemOffset / srcBlock->chunkCols;
+        const int chunkElemCol = chunkElemOffset % srcBlock->chunkCols;
+        ssize_t idx = (srcBlock->chunkStartRow + chunkElemRow) * matrixCols + (srcBlock->chunkStartCol + chunkElemCol);
         // if (idx >= 8192 * 1024 || idx < 0) {
         //   printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", __LINE__, idx, linearStartOffset, chunkElemOffset, srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
         // }
@@ -469,9 +469,9 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset + elemOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
-        const int chunkElemRow = chunkElemOffset / dstBlock.chunkCols;
-        const int chunkElemCol = chunkElemOffset % dstBlock.chunkCols;
-        size_t idx = ((dstBlock.chunkStartRow + chunkElemRow) * matrixCols + (dstBlock.chunkStartCol + chunkElemCol));
+        const int chunkElemRow = chunkElemOffset / dstBlock->chunkCols;
+        const int chunkElemCol = chunkElemOffset % dstBlock->chunkCols;
+        size_t idx = ((dstBlock->chunkStartRow + chunkElemRow) * matrixCols + (dstBlock->chunkStartCol + chunkElemCol));
         // if (idx >= 8192 * 1024 || idx < 0) {
         //   printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
         //     __LINE__, idx, linearStartOffset, chunkElemOffset, srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
@@ -502,7 +502,7 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
 __device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nthreads,
     int nsrcs, const T** srcs, int ndsts, T** dsts, 
-    const uint64_t linearStartOffset, const Block2D& srcBlock, const Block2D& dstBlock,
+    const uint64_t linearStartOffset, const Block2D* srcBlock, const Block2D* dstBlock,
     const size_t matrixRows, const size_t matrixCols, int N) {
   int Nrem = N;
   if (Nrem <= 0) return;

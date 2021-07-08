@@ -305,7 +305,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   // #define ALLREDUCE
 
-  int warmup = 1;
+  int warmup = 100;
   for (int iter = 0; iter < warmup; iter++) {
   #ifdef ALLREDUCE
     NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 

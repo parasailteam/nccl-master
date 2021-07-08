@@ -169,7 +169,7 @@ class ncclPrimitives {
 
   template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, typename Block2D>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, const Block2D& srcBlock, const Block2D& dstBlock, int nelem, ssize_t directOffset) {
+  GenericOp(const T* srcPtr, T* dstPtr, const Block2D* srcBlock, const Block2D* dstBlock, int nelem, ssize_t directOffset) {
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -302,37 +302,37 @@ class ncclPrimitives {
   
   template<typename Block2D>
   __device__ __forceinline__ void
-  send(const T* src, const Block2D& srcBlock, int offset, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, srcBlock, Block2D(), nelem, offset);
+  send(const T* src, const Block2D* srcBlock, int offset, int nelem) {
+    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, srcBlock, (const Block2D*)NULL, nelem, offset);
   }
 
   template<typename Block2D>
   __device__ __forceinline__ void
-  recv(T* dst, const Block2D& dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, Block2D(), dstBlock, nelem, offset);
+  recv(T* dst, const Block2D* dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, (const Block2D*)NULL, dstBlock, nelem, offset);
   }
 
   template<typename Block2D>
   __device__ __forceinline__ void
-  recvCopySend(T* dst, const Block2D& dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, Block2D(), dstBlock, nelem, offset);
+  recvCopySend(T* dst, const Block2D* dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, (const Block2D*)NULL, dstBlock, nelem, offset);
   }
 
   template<typename Block2D>
   __device__ __forceinline__ void
-  recvReduceCopy(const T* src, T* dst, const Block2D& srcBlock, const Block2D& dstBlock, int offset, int nelem) {
+  recvReduceCopy(const T* src, T* dst, const Block2D* srcBlock, const Block2D* dstBlock, int offset, int nelem) {
     GenericOp<0, 0, 1, 0, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
   }
 
   template<typename Block2D>
   __device__ __forceinline__ void
-  recvReduceSend(const T* src, const Block2D& srcBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, srcBlock, Block2D(), nelem, offset);
+  recvReduceSend(const T* src, const Block2D* srcBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, srcBlock, (const Block2D*)NULL, nelem, offset);
   }
 
   template<typename Block2D>
   __device__ __forceinline__ void
-  recvReduceCopySend(const T* src, T* dst, const Block2D& srcBlock, const Block2D& dstBlock, int offset, int nelem) {
+  recvReduceCopySend(const T* src, T* dst, const Block2D* srcBlock, const Block2D* dstBlock, int offset, int nelem) {
     GenericOp<0, 0, 1, 1, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
   }
 
