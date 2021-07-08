@@ -415,7 +415,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
 __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw, const int t,
     int nsrcs, const T** s, int ndsts, T** d, 
-    const uint64_t linearStartOffset, Block2D srcBlock, Block2D dstBlock,
+    const uint64_t linearStartOffset, const Block2D& srcBlock, const Block2D& dstBlock,
     const size_t matrixRows, const size_t matrixCols,
     const int elemOffset, const int Npack) {
   const int inc = nw * UNROLL * WARP_SIZE;
@@ -502,7 +502,7 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
 __device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nthreads,
     int nsrcs, const T** srcs, int ndsts, T** dsts, 
-    const uint64_t linearStartOffset, Block2D srcBlock, Block2D dstBlock,
+    const uint64_t linearStartOffset, const Block2D& srcBlock, const Block2D& dstBlock,
     const size_t matrixRows, const size_t matrixCols, int N) {
   int Nrem = N;
   if (Nrem <= 0) return;

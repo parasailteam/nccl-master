@@ -305,7 +305,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   // #define ALLREDUCE
 
-  int warmup = 10;
+  int warmup = 1;
   for (int iter = 0; iter < warmup; iter++) {
   #ifdef ALLREDUCE
     NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
@@ -417,7 +417,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  float elapsedTime1 = run<float>(rank, 8192, 3072, ncclFloat);
+  float elapsedTime1 = run<float>(rank, 3*8192, 1024, ncclFloat);
 
   printf("Success time: %f\n", elapsedTime1);
   MPI_Finalize();

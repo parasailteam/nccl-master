@@ -167,6 +167,43 @@ class ncclPrimitives {
     }
   }
 
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, typename Block2D>
+  inline __device__ void
+  GenericOp(const T* srcPtr, T* dstPtr, const Block2D& srcBlock, const Block2D& dstBlock, int nelem, ssize_t directOffset) {
+    int offset = 0;
+    int sliceSize = stepSize*SLICESTEPS;
+    int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
+    #pragma unroll
+    for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
+      int realSize = max(0, min(dataSize, nelem-offset));
+      if (tid < nworkers) {
+        if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr;//+offset;
+        if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
+        if (DST && (role & ROLE_DST)) dsts[0] = dstPtr;//+offset;
+        if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
+        if (realSize > 0) {
+          subBarrier();
+          if (DIRECTRECV && srcs[0] == dsts[0]) {
+            // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
+            if (SEND) {
+              // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
+            //  ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+            }
+          } else {
+            ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
+            offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+          }
+        }
+      }
+      barrier();
+      if (SEND && (role & ROLE_POST_SEND) && realSize > 0 && index == 0) __threadfence_system();
+      __syncwarp();
+      if (SEND && (role & ROLE_POST_SEND)) postSend();
+      if (RECV && (role & ROLE_POST_RECV)) postRecv();
+      offset += realSize;
+    }
+  }
+
   __device__ __forceinline__ void loadRecvConn(struct ncclChannel* channel, T* directBuff) {
     if (role & (ROLE_WAIT_RECV|ROLE_POST_RECV)) {
       conn = &channel->devPeers[peer].recv.conn;
@@ -259,6 +296,44 @@ class ncclPrimitives {
 
     loadRecvConn(channel, directBuff);
     loadSendConn(channel);
+  }
+
+  size_t matrixRows, matrixCols;
+  
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  send(const T* src, const Block2D& srcBlock, int offset, int nelem) {
+    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, srcBlock, Block2D(), nelem, offset);
+  }
+
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  recv(T* dst, const Block2D& dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, Block2D(), dstBlock, nelem, offset);
+  }
+
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  recvCopySend(T* dst, const Block2D& dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, Block2D(), dstBlock, nelem, offset);
+  }
+
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  recvReduceCopy(const T* src, T* dst, const Block2D& srcBlock, const Block2D& dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 0, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
+  }
+
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  recvReduceSend(const T* src, const Block2D& srcBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, srcBlock, Block2D(), nelem, offset);
+  }
+
+  template<typename Block2D>
+  __device__ __forceinline__ void
+  recvReduceCopySend(const T* src, T* dst, const Block2D& srcBlock, const Block2D& dstBlock, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
   }
 
   __device__ __forceinline__ void
