@@ -277,9 +277,14 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   if (rank == 0)
 	  ncclGetUniqueId(&id);
   MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD);
+// #define ALLREDUCE
 
-  assert (atoi(getenv ("NCCL_MIN_NCHANNELS")) == atoi(getenv ("NCCL_MAX_NCHANNELS")));
-  int nChannels = atoi(getenv ("NCCL_MIN_NCHANNELS"));
+  int nChannels = 12;
+
+  if (getenv ("NCCL_MIN_NCHANNELS") != NULL) {
+    assert (atoi(getenv ("NCCL_MIN_NCHANNELS")) == atoi(getenv ("NCCL_MAX_NCHANNELS")));
+    nChannels = atoi(getenv ("NCCL_MIN_NCHANNELS"));
+  } 
   char filename[256] = {0};
 
   if (collType == AllGather) {
@@ -289,7 +294,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   } else if (collType == AllReduce) {
     sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   }
-
+  printf("filename '%s'\n", filename);
   ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename);
   MPI_Barrier(MPI_COMM_WORLD);
   
@@ -303,7 +308,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
 
   MPI_Barrier(MPI_COMM_WORLD);
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
-  // #define ALLREDUCE
+  
 
   int warmup = 100;
   for (int iter = 0; iter < warmup; iter++) {

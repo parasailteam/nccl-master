@@ -167,9 +167,10 @@ class ncclPrimitives {
     }
   }
 
-  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, typename Block2D>
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, const Block2D* srcBlock, const Block2D* dstBlock, int nelem, ssize_t directOffset) {
+  GenericOp(const T* srcPtr, T* dstPtr, const int srcChunkStartRow, const int srcChunkStartCol, const int srcChunkRows, const int srcChunkCols, 
+                     const int dstChunkStartRow, const int dstChunkStartCol, const int dstChunkRows, const int dstChunkCols, int nelem, ssize_t directOffset) {
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -190,8 +191,11 @@ class ncclPrimitives {
             //  ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
             }
           } else {
-            ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
-            offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+            // ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
+            // offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+
+            ReduceOrCopyMulti2DIndividualVars<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
+            offset, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, matrixRows, matrixCols, realSize);
           }
         }
       }
@@ -300,40 +304,43 @@ class ncclPrimitives {
 
   size_t matrixRows, matrixCols;
   
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  send(const T* src, const Block2D* srcBlock, int offset, int nelem) {
-    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, srcBlock, (const Block2D*)NULL, nelem, offset);
+  send(const T* src, const int srcChunkStartRow, const int srcChunkStartCol, const int srcChunkRows, const int srcChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, -1, -1, -1, -1, nelem, offset);
   }
 
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  recv(T* dst, const Block2D* dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, (const Block2D*)NULL, dstBlock, nelem, offset);
+  recv(T* dst, const int dstChunkStartRow, const int dstChunkStartCol, const int dstChunkRows, const int dstChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, -1, -1, -1, -1, dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, nelem, offset);
   }
 
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  recvCopySend(T* dst, const Block2D* dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, (const Block2D*)NULL, dstBlock, nelem, offset);
+  recvCopySend(T* dst, const int dstChunkStartRow, const int dstChunkStartCol, const int dstChunkRows, const int dstChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 0, 1>(NULL, dst, -1, -1, -1, -1, dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, nelem, offset);
   }
 
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  recvReduceCopy(const T* src, T* dst, const Block2D* srcBlock, const Block2D* dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 0, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
+  recvReduceCopy(const T* src, T* dst, const int srcChunkStartRow, const int srcChunkStartCol, const int srcChunkRows, const int srcChunkCols, 
+                 const int dstChunkStartRow, const int dstChunkStartCol, const int dstChunkRows, const int dstChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 1, 0, 1, 1>(src, dst, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, nelem, offset);
   }
 
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  recvReduceSend(const T* src, const Block2D* srcBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, srcBlock, (const Block2D*)NULL, nelem, offset);
+  recvReduceSend(const T* src, const int srcChunkStartRow, const int srcChunkStartCol, const int srcChunkRows, const int srcChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 0>(src, NULL, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, -1, -1, -1, -1, nelem, offset);
   }
 
-  template<typename Block2D>
+  
   __device__ __forceinline__ void
-  recvReduceCopySend(const T* src, T* dst, const Block2D* srcBlock, const Block2D* dstBlock, int offset, int nelem) {
-    GenericOp<0, 0, 1, 1, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
+  recvReduceCopySend(const T* src, T* dst, const int srcChunkStartRow, const int srcChunkStartCol, const int srcChunkRows, const int srcChunkCols, 
+                     const int dstChunkStartRow, const int dstChunkStartCol, const int dstChunkRows, const int dstChunkCols, int offset, int nelem) {
+    GenericOp<0, 0, 1, 1, 1, 1>(src, dst, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, 
+                                          dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, nelem, offset);
   }
 
   __device__ __forceinline__ void
