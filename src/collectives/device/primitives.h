@@ -178,8 +178,11 @@ class ncclPrimitives {
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
       if (tid < nworkers) {
+        //if (threadIdx.x == 0 && SRC && DST) printf("realSize %d offset %d (step%NCCL_STEPS)*stepSize %d srcs[1] %p\n", realSize, offset, (step%NCCL_STEPS)*stepSize, srcs[1]);
         if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr;//+offset;
         if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
+        //if (threadIdx.x == 0 && SRC && DST) printf("realSize %d offset %d (step%NCCL_STEPS)*stepSize %d srcs[1] %p\n", realSize, offset, (step%NCCL_STEPS)*stepSize, srcs[1]);
+
         if (DST && (role & ROLE_DST)) dsts[0] = dstPtr;//+offset;
         if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
         if (realSize > 0) {
@@ -193,7 +196,6 @@ class ncclPrimitives {
           } else {
             // ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
             // offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
-
             ReduceOrCopyMulti2DIndividualVars<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, 
             offset, srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols, matrixRows, matrixCols, realSize);
           }

@@ -231,53 +231,26 @@ void memset_identity(T*f, size_t nelems)
 }
 
 template<class T>
-float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datatype, int totalIters)
+float run(int rank,const ncclDataType_t datatype, int totalIters)
 {
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   ncclComm_t comm;
   CUDACHECK(cudaSetDevice(rank % 16));
-  const size_t size = M * N;
-  //This code implements the backward pass of a large layer, using model parallelism
-  //The whole dataset is divided into several minibatches, with one minibatch assigned to one gpu.
-  //The gradients are received from each gpu, then reduced, and weights are updated as:
-  //w = w - alpha * g
-  if (rank == 0) printf("size %d\n", size);
+  
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
   CollType collType = AllReduce;
   const int epochs = 1000;
-
-  //allocating and initializing device buffers
-  T* minibatch_gradients;
-  T* allreduced_gradient;
-
-
-  CUDACHECK(cudaMalloc(&minibatch_gradients, size * sizeof(T)));
-  CUDACHECK(cudaMalloc(&allreduced_gradient, size * sizeof(T)));
-  cudaStream_t s;
-  
-  //cudaMemRandInt(minibatch_gradients, size);
-  CUDACHECK(cudaMemset(allreduced_gradient, 0, size * sizeof(T)));
-  if (collType == AllGather) {
-    minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
-    memset_value(minibatch_gradients, (float)(1<<rank), size/comm_size);
-  } else if (collType == ReduceScatter || collType == AllReduce) {
-    // minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
-    //memset_value(minibatch_gradients, (float)(1<<rank), size);
-    cudaMemRandInt(minibatch_gradients, size);
-    //memset_identity(minibatch_gradients, size);
-  }
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
-  CUDACHECK(cudaStreamCreate(&s));
 
   //initializing NCCL
   ncclUniqueId id;
   if (rank == 0)
 	  ncclGetUniqueId(&id);
   MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD);
-// #define ALLREDUCE
+  // #define ALLREDUCE
 
   int nChannels = 12;
 
@@ -309,112 +282,141 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   MPI_Barrier(MPI_COMM_WORLD);
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   
-
-  int warmup = 100;
-  for (int iter = 0; iter < warmup; iter++) {
-  #ifdef ALLREDUCE
-    NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
-            (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
-
-    CUDACHECK(cudaStreamSynchronize(s));
-    if (iter == 0)
-       assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
-  #else
-    if (collType == AllGather) {
-      T* minibatch_gradients2;
-      CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
-      CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
-      // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-      //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-
-      // NCCLCHECK(ncclCustomCollective(customAllGatherColl, (const void*)minibatch_gradients, 
-      //         (void*)allreduced_gradient, size/comm_size, datatype, ncclSum, comm, s));
-      // CUDACHECK(cudaStreamSynchronize(s));
-
-      assert(check_sccl_collective(size/comm_size, rank, iter, comm_size, minibatch_gradients2, allreduced_gradient));
-    } else if (collType == ReduceScatter) {
-      T* minibatch_gradients2;
-      CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
-      CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
-      // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-      //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-      assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
-    } else if (collType == AllReduce) {
-      NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-              (void*)allreduced_gradient, N, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-      if (iter==0) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
-    }
-  #endif
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  if (rank == 0) printf("Results checked\n");
-
-  cudaEvent_t start, stop;
-  float elapsedTime;
-  CUDACHECK(cudaEventCreate(&start));
-  CUDACHECK(cudaEventCreate(&stop));
-  MPI_Barrier(MPI_COMM_WORLD);
-  CUDACHECK(cudaEventRecord(start,0));
-
-  for (int iter = 0; iter < totalIters; iter++) {
-  #ifdef ALLREDUCE
-    NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
-            (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
-
-    CUDACHECK(cudaStreamSynchronize(s));
-    
-  #else
-    if (collType == AllGather) {
-     
-      NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-              (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-
-      // NCCLCHECK(ncclCustomCollective(customAllGatherColl, (const void*)minibatch_gradients, 
-      //         (void*)allreduced_gradient, size/comm_size, datatype, ncclSum, comm, s));
-      // CUDACHECK(cudaStreamSynchronize(s));
-
-      // assert(check_sccl_collective(size/comm_size, rank, iter, comm_size, minibatch_gradients2, allreduced_gradient));
-    } else if (collType == ReduceScatter) {
-      
-      NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-              (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-      // assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
-    } else if (collType == AllReduce) {
-      NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-              (void*)allreduced_gradient, N, size/comm_size, datatype, comm, s));
-
-      CUDACHECK(cudaStreamSynchronize(s));
-      // assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
-    }
-  #endif
-  }
+  int M[] = {8192*1, 16384, 8192*3, 8192*4, 8192*8, 8192 * 10};
+  int N[] = {3072, 3072, 3072, 3072, 3072, 3072};
   
-  MPI_Barrier(MPI_COMM_WORLD);
-  CUDACHECK(cudaEventRecord(stop,0));
-  CUDACHECK(cudaEventSynchronize(stop));
-  CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
+  for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
+    const size_t size = M[i] * N[i];
+    if (rank == 0) printf("size %d\n", size);
+    //allocating and initializing device buffers
+    T* minibatch_gradients;
+    T* allreduced_gradient;
+        cudaStream_t s;
 
-  //free device buffers
-  CUDACHECK(cudaFree(minibatch_gradients));
-  CUDACHECK(cudaFree(allreduced_gradient));
-  CUDACHECK(cudaStreamDestroy(s));
+    CUDACHECK(cudaStreamCreate(&s));
+
+
+    CUDACHECK(cudaMalloc(&minibatch_gradients, size * sizeof(T)));
+    CUDACHECK(cudaMalloc(&allreduced_gradient, size * sizeof(T)));
+    
+    //cudaMemRandInt(minibatch_gradients, size);
+    CUDACHECK(cudaMemset(allreduced_gradient, 0, size * sizeof(T)));
+    if (collType == AllGather) {
+      minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
+      memset_value(minibatch_gradients, (float)(1<<rank), size/comm_size);
+    } else if (collType == ReduceScatter || collType == AllReduce) {
+      // minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
+      //memset_value(minibatch_gradients, (float)(1<<rank), size);
+      //cudaMemRandInt(minibatch_gradients, size);
+      memset_identity(minibatch_gradients, size);
+    }
+    
+      int warmup = 100;
+      for (int iter = 0; iter < warmup; iter++) {
+      #ifdef ALLREDUCE
+        NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
+                (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
+
+        CUDACHECK(cudaStreamSynchronize(s));
+        if (iter == 0)
+          assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+      #else
+        if (collType == AllGather) {
+          T* minibatch_gradients2;
+          CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
+          CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
+          // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+          //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+
+          // NCCLCHECK(ncclCustomCollective(customAllGatherColl, (const void*)minibatch_gradients, 
+          //         (void*)allreduced_gradient, size/comm_size, datatype, ncclSum, comm, s));
+          // CUDACHECK(cudaStreamSynchronize(s));
+
+          assert(check_sccl_collective(size/comm_size, rank, iter, comm_size, minibatch_gradients2, allreduced_gradient));
+        } else if (collType == ReduceScatter) {
+          T* minibatch_gradients2;
+          CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
+          CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
+          // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+          //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+          assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+        } else if (collType == AllReduce) {
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+          if (iter==0) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+        }
+      #endif
+      }
+
+      MPI_Barrier(MPI_COMM_WORLD);
+
+      if (rank == 0) printf("Results checked\n");
+
+      cudaEvent_t start, stop;
+      float elapsedTime;
+      CUDACHECK(cudaEventCreate(&start));
+      CUDACHECK(cudaEventCreate(&stop));
+      MPI_Barrier(MPI_COMM_WORLD);
+      CUDACHECK(cudaEventRecord(start,0));
+
+      for (int iter = 0; iter < totalIters; iter++) {
+      #ifdef ALLREDUCE
+        NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
+                (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
+
+        CUDACHECK(cudaStreamSynchronize(s));
+        
+      #else
+        if (collType == AllGather) {
+        
+          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+
+          // NCCLCHECK(ncclCustomCollective(customAllGatherColl, (const void*)minibatch_gradients, 
+          //         (void*)allreduced_gradient, size/comm_size, datatype, ncclSum, comm, s));
+          // CUDACHECK(cudaStreamSynchronize(s));
+
+          // assert(check_sccl_collective(size/comm_size, rank, iter, comm_size, minibatch_gradients2, allreduced_gradient));
+        } else if (collType == ReduceScatter) {
+          
+          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+          // assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+        } else if (collType == AllReduce) {
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+
+          CUDACHECK(cudaStreamSynchronize(s));
+          // assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+        }
+      #endif
+      }
+      
+      MPI_Barrier(MPI_COMM_WORLD);
+      CUDACHECK(cudaEventRecord(stop,0));
+      CUDACHECK(cudaEventSynchronize(stop));
+      CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
+      printf("Success time %d x %d: %f\n", M[i], N[i], elapsedTime);
+      //free device buffers
+      CUDACHECK(cudaFree(minibatch_gradients));
+      CUDACHECK(cudaFree(allreduced_gradient));
+      CUDACHECK(cudaStreamDestroy(s));
+  }
 
   //finalizing NCCL
   ncclCommDestroy(comm);
 
-  return elapsedTime;
+  return 10;
 }
 
 int main(int argc, char* argv[])
@@ -422,14 +424,9 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int M[] = {1024, 16384, 8192*3, 8192*4, 8192 * 10};
-  int N[] = {3072, 3072, 3072, 3072, 3072};
   int totalIters = 100;
-  for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
-    float elapsedTime = run<float>(rank, M[i], N[i], ncclFloat, totalIters);
-
-    printf("Success time %d x %d: %f\n", M[i], N[i], elapsedTime);
-  }
+  
+    float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 
   MPI_Finalize();
   return 0;

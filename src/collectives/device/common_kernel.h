@@ -582,19 +582,19 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
     // Load and reduce
     if (SRC) {
       for (int u = 0; u < UNROLL; ++u) {
-        const size_t chunkElemOffset = (linearStartOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
         const int chunkElemRow = chunkElemOffset / srcChunkCols;
         const int chunkElemCol = chunkElemOffset % srcChunkCols;
         ssize_t idx = (srcChunkStartRow + chunkElemRow) * matrixCols + (srcChunkStartCol + chunkElemCol);
-        if (idx >= 8192 * 1024 || idx < 0 || idx == 262144) {
-          printf("%d: idx %ld linearStartOffset %ld chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
-          __LINE__, idx, linearStartOffset, srcChunkStartRow, srcChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
-        }
-        if (idx == 262144) {
-          float* f = (float*)(const Pack128*)(s[0]+idx);
-          printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
-        }
+        // if (idx >= 3072 * 1024 || idx == 262144) {
+        //   printf("%d: idx %ld linearStartOffset %ld elemOffset %d (offset + u*WARP_SIZE) %d chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
+        //   __LINE__, idx, linearStartOffset, elemOffset, (offset + u*WARP_SIZE), srcChunkStartRow, srcChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        // }
+        // if (idx == 262144) {
+        //   float* f = (float*)(const Pack128*)(s[0]+idx);
+        //   printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        // }
         Fetch128(vals[u], (const Pack128*)(s[0]+idx));
       }
     } else {
@@ -604,7 +604,25 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
     #pragma unroll
     for (int i=1; i<MINSRCS; i++) {
       Pack128 vals2[UNROLL];
-      for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+      for (int u = 0; u < UNROLL; ++u) {
+
+        Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+        const int chunkElemRow = chunkElemOffset / srcChunkCols;
+        const int chunkElemCol = chunkElemOffset % srcChunkCols;
+        ssize_t idx = (srcChunkStartRow + chunkElemRow) * matrixCols + (srcChunkStartCol + chunkElemCol);
+        // if (idx >= 3072 * 1024 || idx == 262144) {
+        //   printf("%d: idx %ld linearStartOffset %ld elemOffset %d (offset %d + u*WARP_SIZE %d) %d chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld Npack %d\n", 
+        //   __LINE__, idx, linearStartOffset, elemOffset, offset, u, (offset + u*WARP_SIZE), srcChunkStartRow, srcChunkStartCol, chunkElemRow, chunkElemCol, matrixCols, Npack);
+        // }
+        // if (idx == 262144) {
+        //   float* f = (float*)(&vals2[u]);
+        //   float* f1 = (float*)(&vals[u]);
+        //   printf("622: f %f %f %f %f; f1 %f %f %f %f s[1] %p srcs[1]+u*WARP_SIZE %p\n", f[0], f[1], f[2], f[3], f1[0], f1[1], f1[2], f1[3], s[1], srcs[1] + u*WARP_SIZE);
+        // }
+      }
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
     }
     #pragma unroll
@@ -619,25 +637,42 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
     // Store
     if (DST) {
       for (int u = 0; u < UNROLL; ++u) {
-        const size_t chunkElemOffset = (linearStartOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+        const size_t chunkElemOffset = (linearStartOffset  + elemOffset +  (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
         const int chunkElemRow = chunkElemOffset / dstChunkCols;
         const int chunkElemCol = chunkElemOffset % dstChunkCols;
         size_t idx = ((dstChunkStartRow + chunkElemRow) * matrixCols + (dstChunkStartCol + chunkElemCol));
-        if (idx >= 8192 * 1024 || idx < 0 || idx == 262144) {
-          printf("%d: idx %ld linearStartOffset %ld chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
-            __LINE__, idx, linearStartOffset, dstChunkStartRow, dstChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
-        }
-        if (idx == 262144) {
-          float* f = (float*)(&vals[u]);
-          printf("474: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
-        }
+        // if (idx >= 3072 * 1024 || idx == 262144) {
+        //   printf("%d: idx %ld linearStartOffset %ld elemOffset %d (offset %d + u*WARP_SIZE %d) %d chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
+        //     __LINE__, idx, linearStartOffset, elemOffset, offset, u, (offset + u*WARP_SIZE), dstChunkStartRow, dstChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        // }
+        // if (idx == 262144) {
+        //   float* f = (float*)(&vals[u]);
+        //   printf("474: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        // }
         Store128((Pack128*)(d[0]+idx), vals[u]);
       }
     }
     #pragma unroll
     for (int i = DST; i < MINDSTS; i++) {
-      for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+      for (int u = 0; u < UNROLL; ++u) {
+        if (DST == 0) {
+          const size_t chunkElemOffset = (linearStartOffset  + elemOffset +  (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+          const int chunkElemRow = chunkElemOffset / dstChunkCols;
+          const int chunkElemCol = chunkElemOffset % dstChunkCols;
+          size_t idx = ((srcChunkStartRow + chunkElemRow) * matrixCols + (srcChunkStartCol + chunkElemCol));
+          // if (idx >= 3072 * 1024 || idx == 262144) {
+          //   printf("%d: idx %ld linearStartOffset %ld elemOffset %d (offset %d + u*WARP_SIZE %d) %d chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
+          //     __LINE__, idx, linearStartOffset, elemOffset, offset, u, (offset + u*WARP_SIZE), srcChunkStartRow, srcChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+          // }
+          // if (chunkElemOffset == 262144) {
+          //   float* f = (float*)(&vals[u]);
+          //   printf("670: f %f %f %f %f d[1] %p dsts[1]+u*WARP_SIZE %p\n", f[0], f[1], f[2], f[3], d[0], dsts[0] + u*WARP_SIZE);
+          // }
+        }
+        Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+      }
     }
     #pragma unroll
     for (int i=MINDSTS; i<MAXDSTS; i++) {
@@ -645,8 +680,8 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
         for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
       }
     }
-    for (int i=0; i<MAXSRCS; i++) srcs[i] += inc;
-    for (int i=0; i<MAXDSTS; i++) dsts[i] += inc;
+    for (int i=SRC; i<MAXSRCS; i++) srcs[i] += inc;
+    for (int i=DST; i<MAXDSTS; i++) dsts[i] += inc;
     offset += inc;
   }
 }
@@ -664,7 +699,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti2DIndividualVars(const int tid,
   int w = tid / WARP_SIZE;       // Warp number
   int nw = nthreads / WARP_SIZE; // Number of warps
   int t = tid % WARP_SIZE;       // Thread (inside the warp)
-
+    
   // Check that all is 16B aligned. If not don't use 16B load/stores.
   int align = 0;
   #pragma unroll
@@ -683,7 +718,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti2DIndividualVars(const int tid,
     int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
     int Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti2DIndividualVars<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset + offset, 
+    ReduceCopy128bMulti2DIndividualVars<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, 
     srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, 
     dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols,
     matrixRows, matrixCols, offset, Npack);
@@ -696,7 +731,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti2DIndividualVars(const int tid,
     Npack = Nrem / PACKELEMS;
     Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti2DIndividualVars<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset + offset, 
+    ReduceCopy128bMulti2DIndividualVars<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, 
     srcChunkStartRow, srcChunkStartCol, srcChunkRows, srcChunkCols, 
     dstChunkStartRow, dstChunkStartCol, dstChunkRows, dstChunkCols,
     matrixRows, matrixCols, offset, Npack);

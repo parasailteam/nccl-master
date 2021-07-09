@@ -179,7 +179,7 @@ class scclFunction2D {
 
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
-      const int total2DChunks = 1;DIVUP(rows, chunkRows)*(ld/chunkld);
+      const int total2DChunks = DIVUP(rows, chunkRows)*(ld/chunkld);
       // if (threadIdx.x == 0) {
       //   printf("loopSize %ld total2DChunks %ld sizePerScclChunk %ld\n", loopSize, total2DChunks, sizePerScclChunk);
       // }
@@ -218,16 +218,16 @@ class scclFunction2D {
             int thisCount = min(scclMaxAllowedCount, count-c);
 
             int srcChunkStartRow = srcChunkIdx / numRealChunks * chunkRows;
-            int srcChunkStartCol = srcChunkIdx % numRealChunks * realChunkCols;
+            int srcChunkStartCol = srcChunkIdx % numRealChunks * chunkld;
             int nelem = min(chunkSize, (int)(size*nranks - (srcChunkStartRow * ld + (rows - srcChunkStartRow) * (ld - (ld - srcChunkStartCol)))));
-            int srcChunkRows = min(min(nelem/realChunkCols, chunkRows), rows - srcChunkStartRow);
-            int srcChunkCols = realChunkCols;
+            int srcChunkRows = min(min(nelem/chunkld, chunkRows), rows - srcChunkStartRow);
+            int srcChunkCols = chunkld;
 
             int dstChunkStartRow = dstChunkIdx / numRealChunks * chunkRows;
-            int dstChunkStartCol = dstChunkIdx % numRealChunks * realChunkCols;
+            int dstChunkStartCol = dstChunkIdx % numRealChunks * chunkld;
             nelem = min(chunkSize, (int)(size*nranks - (dstChunkStartRow * ld + (rows - dstChunkStartRow) * (ld - (ld - dstChunkStartCol)))));
-            int dstChunkRows = min(min(nelem/realChunkCols, chunkRows), rows - dstChunkStartRow);
-            int dstChunkCols = realChunkCols;
+            int dstChunkRows = min(min(nelem/chunkld, chunkRows), rows - dstChunkStartRow);
+            int dstChunkCols = chunkld;
             
 
             switch (sccltran->type) {
@@ -380,14 +380,14 @@ struct SimpleWrapper2D {
         prims.matrixCols = ld;
         //Align chunk size to the number of columns.
         chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
-        ALIGN_SIZE(chunkSize, ld);
+        ALIGN_DOWN(chunkSize, ld);
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rows);
         chunkSize = chunkRows * chunkld;
         numRealChunks = ld/chunkld;
-        if (threadIdx.x == 0) {
-          printf("chunkRows %d %d\n", chunkRows, chunkSize);
-        }
+        // if (threadIdx.x == 0) {
+        //   printf("chunkRows %d %d\n", chunkRows, chunkSize);
+        // }
       }
 
   // __device__ __forceinline__ size_t initIter(ssize_t sizePerScclChunk, ssize_t gridOffset) {
@@ -401,7 +401,7 @@ struct SimpleWrapper2D {
   //   return chunkOffset;
   // }
 
-  const bool toPrint = true;
+  const bool toPrint = false;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
     //assert(srcBlock.isValid());
     // assert(srcBlock.nelem() == 128*1024);
