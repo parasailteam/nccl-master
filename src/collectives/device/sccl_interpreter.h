@@ -100,8 +100,8 @@ class scclFunction {
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
             scclFlags[bid].flag = curFlag;
           }
-	  if (threadIdx.x == 0)
-		  printf("bid %d workIndex %d step %d\n", bid, workIndex, i);
+	  // if (threadIdx.x == 0)
+		//   printf("%dbid %d workIndex %d step %d\n", (int)(i == scclTB->nsteps-1), bid, workIndex, i);
         }
       }
     }
