@@ -231,7 +231,7 @@ void memset_identity(T*f, size_t nelems)
 }
 
 template<class T>
-float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datatype)
+float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datatype, int totalIters)
 {
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -364,7 +364,7 @@ float run(int rank, const int64_t M, const int64_t N, const ncclDataType_t datat
   MPI_Barrier(MPI_COMM_WORLD);
   CUDACHECK(cudaEventRecord(start,0));
 
-  for (int iter = 0; iter < 100; iter++) {
+  for (int iter = 0; iter < totalIters; iter++) {
   #ifdef ALLREDUCE
     NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
             (void*)allreduced_gradient, size, datatype, ncclSum, comm, s));
@@ -422,9 +422,15 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  float elapsedTime1 = run<float>(rank, 3*8192, 1024, ncclFloat);
+  int M[] = {1024, 16384, 8192*3, 8192*4, 8192 * 10};
+  int N[] = {3072, 3072, 3072, 3072, 3072};
+  int totalIters = 100;
+  for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
+    float elapsedTime = run<float>(rank, M[i], N[i], ncclFloat, totalIters);
 
-  printf("Success time: %f\n", elapsedTime1);
+    printf("Success time %d x %d: %f\n", M[i], N[i], elapsedTime);
+  }
+
   MPI_Finalize();
   return 0;
 }

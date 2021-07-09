@@ -581,20 +581,20 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
     Pack128 vals[UNROLL];
     // Load and reduce
     if (SRC) {
-      #pragma unroll
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
         const int chunkElemRow = chunkElemOffset / srcChunkCols;
         const int chunkElemCol = chunkElemOffset % srcChunkCols;
         ssize_t idx = (srcChunkStartRow + chunkElemRow) * matrixCols + (srcChunkStartCol + chunkElemCol);
-        // if (idx >= 8192 * 1024 || idx < 0) {
-        //   printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", __LINE__, idx, linearStartOffset, chunkElemOffset, srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
-        // }
-        // if (idx == 0) {
-        //   float* f = (float*)(const Pack128*)(s[0]+idx);
-        //   printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
-        // }
+        if (idx >= 8192 * 1024 || idx < 0 || idx == 262144) {
+          printf("%d: idx %ld linearStartOffset %ld chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
+          __LINE__, idx, linearStartOffset, srcChunkStartRow, srcChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        }
+        if (idx == 262144) {
+          float* f = (float*)(const Pack128*)(s[0]+idx);
+          printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        }
         Fetch128(vals[u], (const Pack128*)(s[0]+idx));
       }
     } else {
@@ -618,21 +618,20 @@ __device__ __forceinline__ void ReduceCopy128bMulti2DIndividualVars(const int w,
 
     // Store
     if (DST) {
-      #pragma unroll
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
         const int chunkElemRow = chunkElemOffset / dstChunkCols;
         const int chunkElemCol = chunkElemOffset % dstChunkCols;
         size_t idx = ((dstChunkStartRow + chunkElemRow) * matrixCols + (dstChunkStartCol + chunkElemCol));
-        // if (idx >= 8192 * 1024 || idx < 0) {
-        //   printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
-        //     __LINE__, idx, linearStartOffset, chunkElemOffset, srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
-        // }
-        // if (idx == 0) {
-        //   float* f = (float*)(&vals[u]);
-        //   printf("474: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
-        // }
+        if (idx >= 8192 * 1024 || idx < 0 || idx == 262144) {
+          printf("%d: idx %ld linearStartOffset %ld chunkStartRow %d chunkStartCol %d chunkElemRow %d chunkElemCol %d matrixCols %ld\n", 
+            __LINE__, idx, linearStartOffset, dstChunkStartRow, dstChunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        }
+        if (idx == 262144) {
+          float* f = (float*)(&vals[u]);
+          printf("474: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        }
         Store128((Pack128*)(d[0]+idx), vals[u]);
       }
     }
