@@ -436,13 +436,14 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
         const int chunkElemRow = chunkElemOffset / srcBlock->chunkCols;
         const int chunkElemCol = chunkElemOffset % srcBlock->chunkCols;
         ssize_t idx = (srcBlock->chunkStartRow + chunkElemRow) * matrixCols + (srcBlock->chunkStartCol + chunkElemCol);
-        // if (idx >= 8192 * 1024 || idx < 0) {
-        //   printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", __LINE__, idx, linearStartOffset, chunkElemOffset, srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
-        // }
-        // if (idx == 0) {
-        //   float* f = (float*)(const Pack128*)(s[0]+idx);
-        //   printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
-        // }
+        if (idx >= 8192 * 1024 || idx < 0) {
+          // printf("%d: idx %ld linearStartOffset %ld chunkElemOffset %ld chunkStartRow %ld chunkStartCol %ld chunkElemRow %d chunkElemCol %d matrixCols %ld\n", __LINE__, idx, linearStartOffset, chunkElemOffset, 
+          // srcBlock.chunkStartRow, srcBlock.chunkStartCol, chunkElemRow, chunkElemCol, matrixCols);
+        }
+        if (idx == 512*1024) {
+          float* f = (float*)(const Pack128*)(s[0]+idx);
+          printf("444: f %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+        }
         Fetch128(vals[u], (const Pack128*)(s[0]+idx));
       }
     } else {

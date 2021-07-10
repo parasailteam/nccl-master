@@ -115,11 +115,13 @@ bool check_sccl_reducescatter(const uint64_t size,
   // MPI_Allgather(h_minibatch_gradients, size, MPI_FLOAT, h_reduced_grad_mpi, size, MPI_FLOAT, MPI_COMM_WORLD);
   // else
     // MPI_AllGather(h_minibatch_gradients, h_reduced_grad_mpi, size, MPI_DOUBLE, MPI_COMM_WORLD);
-  float ref = 0.0f;
-  for (int i = 0; i < comm_size; i++) {
-    ref += (float)(1 << i);
-  }
+    int recvcounts[comm_size];
+    for (int i = 0; i < comm_size; i++) {
+      recvcounts[i] = size/comm_size;
+    }
+  MPI_Reduce_scatter(h_minibatch_gradients, h_reduced_grad_mpi, recvcounts, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
   for (uint64_t i = 0; i < size/comm_size; i++) {
+    T ref = h_reduced_grad_mpi[i];
     if (not eqFloat(h_reduced_grad[i], ref)) {
       printf ("[%d] Mismatch in h_reduced_grad at '%d': ref '%f' computed '%f',h_minibatch_gradients '%f'\n", rank, i, ref, h_reduced_grad[i], h_minibatch_gradients[i]);
       passed = false;
@@ -240,7 +242,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   CUDACHECK(cudaSetDevice(rank % 16));
   
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
-  CollType collType = AllReduce;
+  CollType collType = ReduceScatter;
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
@@ -263,7 +265,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   if (collType == AllGather) {
     sprintf(filename, "allgather_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   } else if (collType == ReduceScatter) {
-    sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel.xml", comm_size, nChannels);
+    sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   } else if (collType == AllReduce) {
     sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   }
@@ -283,7 +285,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   
   int M[] = {8192*1, 16384, 8192*3, 8192*4, 8192*8, 8192 * 10};
-  int N[] = {3072, 3072, 3072, 3072, 3072, 3072};
+  int N[] = {3072, 3072, 3072, 3072, 3072, 3072, 3072};
   
   for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
     const size_t size = M[i] * N[i];
@@ -311,7 +313,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
       memset_identity(minibatch_gradients, size);
     }
     
-      int warmup = 100;
+      int warmup = 1;
       for (int iter = 0; iter < warmup; iter++) {
       #ifdef ALLREDUCE
         NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
@@ -325,8 +327,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           T* minibatch_gradients2;
           CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
           CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
-          // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-          //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
 
@@ -339,8 +341,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           T* minibatch_gradients2;
           CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
           CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
-          // NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-          //         (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
@@ -424,7 +426,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 100;
+  int totalIters = 1;
   
     float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 
