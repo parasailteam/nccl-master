@@ -134,8 +134,105 @@ struct Block2D {
   int nelem() const {return chunkRows * chunkCols;}
 };
 
+
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction2D {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {
+      struct ncclDevComm* comm = args->comm;
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
+      const int tid = threadIdx.x;
+      const int sync_tid = args->nThreads-1; // last thread is most likely not doing anthing and used for SCCL cross thread synchronization
+      const int bid = blockIdx.x;
+      struct scclThreadBlock* scclTB = &scclAlgo->scclTB[bid];
+      const int channelId = scclTB->channelId;
+      struct ncclChannel* channel = comm->channels+channelId;
+
+      // Compute pointers
+      T * thisInput = (T*)args->sendbuff;
+      T * thisOutput = (T*)args->recvbuff;
+      T * thisScratch = (T*)args->scratchbuff;
+      int recvPeer = scclTB->recvpeer;
+      int sendPeer = scclTB->sendpeer;
+
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, 1024, scclAlgo->chunkld};
+
+
+      const int nranks = comm->nRanks;
+      const ssize_t loopSize = (ssize_t)prims.chunkSize;
+      const ssize_t size = args->coll.count;
+      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
+
+      // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
+      // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
+      const int workIndex = args->index+1;
+      volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
+
+      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
+        size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
+
+        ssize_t srcoffset, dstoffset;
+        T* srcPointer, * dstPointer;
+        for (int i = 0; i < scclTB->nsteps; i++){
+          struct scclTransfer* sccltran = &scclTB->transfers[i];
+          // first wait if there is a dependence
+          int8_t dependentBid = sccltran->dependentBid;
+          int8_t dependentStep = sccltran->dependentStep;
+          if (sccltran->dependentBid >= 0){
+              if (tid == sync_tid){
+              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+              while ((scclFlags + dependentBid)->flag < goalFlag){};
+              }
+              __syncthreads();
+          }
+
+          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          int count = sccltran->count;
+
+          for (int c = 0; c < count; c += scclMaxAllowedCount) {
+            srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
+            dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
+
+            int thisCount = min(scclMaxAllowedCount, count-c);
+            switch (sccltran->type) {
+              case SCCL_SEND:
+                prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+                break;
+              case SCCL_RECV:
+                prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+                break;
+              case SCCL_RECV_COPY_SEND:
+                prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
+                break;
+              case SCCL_RECV_REDUCE_SEND:
+                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
+                break;
+              case SCCL_RECV_REDUCE_COPY_SEND:
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_RECV_REDUCE_COPY:
+                prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_NO_OP:
+                break;
+              default:
+                return;
+            }
+          }
+          if (tid == sync_tid && sccltran->has_dependence){
+            __threadfence();
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
+            scclFlags[bid].flag = curFlag;
+          }
+        }
+      }
+    }
+};
+
+template<typename T, typename PRIMS_WRAPPER>
+class scclFunction3D {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       struct ncclDevComm* comm = args->comm;
