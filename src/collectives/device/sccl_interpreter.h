@@ -159,7 +159,7 @@ class scclFunction2D {
       const int nranks = comm->nRanks;
       const int rows = (size * nranks)/ld;
 
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, scclAlgo->chunkld};
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, scclAlgo->chunkld, comm->rank};
 
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
@@ -170,7 +170,7 @@ class scclFunction2D {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < (size*nranks); gridOffset += loopSize, iter++) {
+      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
         const int gridOffsetStartRow = gridOffset / ld;
 
@@ -236,7 +236,7 @@ class scclFunction2D {
       }
     }
 };
-
+/* 
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction3D {
   public:
@@ -353,7 +353,7 @@ class scclFunction3D {
         }
       }
     }
-};
+}; */
 
 template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives2D : public ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC> {
@@ -453,11 +453,11 @@ struct SimpleWrapper2D {
   ncclPrimitives2D<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
     __device__ SimpleWrapper2D(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel,
-                           int ld, int rows, int chunkld)
+                           int ld, int rows, int chunkld, int rank)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       chunkSize(stepSize * SCCL_CHUNKSTEPS),
-      ld(ld), chunkld(chunkld), realChunkCols(chunkld),
+      ld(ld), chunkld(chunkld), realChunkCols(chunkld), rank(rank),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
         prims.matrixRows = rows;
         prims.matrixCols = ld;
