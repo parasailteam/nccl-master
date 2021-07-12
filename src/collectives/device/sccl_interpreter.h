@@ -215,7 +215,7 @@ class scclFunction2D {
             int thisCount = min(scclMaxAllowedCount, count-c);
             
             const Block2D srcBlock = Block2D(size*nranks, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
-            const Block2D dstBlock = Block2D(size*nranks, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
+            const Block2D dstBlock = Block2D(size*nranks, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows/nranks, ld);
 
             switch (sccltran->type) {
               case SCCL_SEND:
@@ -353,6 +353,9 @@ struct SimpleWrapper2D {
         prims.matrixCols = ld;
         //Align chunk size to the number of columns.
         chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
+        if (threadIdx.x == 0) {
+          printf("%d stepSize %d buffsize %d\n", chunkSize, (int)stepSize, (int)args->comm->buffSizes[NCCL_PROTO_SIMPLE]);
+        }
         ALIGN_DOWN(chunkSize, ld);
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rows);
