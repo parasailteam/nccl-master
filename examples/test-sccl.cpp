@@ -242,7 +242,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   CUDACHECK(cudaSetDevice(rank % 16));
   
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
-  CollType collType = ReduceScatter;
+  CollType collType = AllReduce;
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
@@ -426,7 +426,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 1;
+  int totalIters = 100;
   
     float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 
