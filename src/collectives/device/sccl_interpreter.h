@@ -180,14 +180,15 @@ class scclFunction2D {
 
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
-      const int total2DChunks = DIVUP(rows, chunkRows)*(ld/chunkld);
+      const int perRankChunks = DIVUP(rows/nchunksPerLoop, chunkRows)*(ld/chunkld);
+      const int total2DChunks = perRankChunks*nchunksPerLoop;
       // if (threadIdx.x == 0) {
       //   printf("loopSize %ld total2DChunks %ld sizePerScclChunk %ld\n", loopSize, total2DChunks, sizePerScclChunk);
       // }
       int iter;
 
       for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < total2DChunks && dstGridChunkIdx < total2DChunks; 
-           srcGridChunkIdx += 1, dstGridChunkIdx += 1, iter++) {
+           srcGridChunkIdx += nchunksPerLoop, dstGridChunkIdx += nchunksPerLoop, iter++) {
 
         T* srcPointer, * dstPointer;
 
@@ -210,12 +211,12 @@ class scclFunction2D {
 
           for (int c = 0; c < count; c += scclMaxAllowedCount) {           
             int dstChunkIdx = dstGridChunkIdx + sccltran->dstoffset + c;
-            int srcChunkIdx = srcGridChunkIdx + (sccltran->srcoffset + c)*(total2DChunks/nchunksPerLoop);
+            int srcChunkIdx = srcGridChunkIdx + (sccltran->srcoffset + c)*perRankChunks;
             
             int thisCount = min(scclMaxAllowedCount, count-c);
             
             const Block2D srcBlock = Block2D(size*nranks, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
-            const Block2D dstBlock = Block2D(size*nranks, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows/nranks, ld);
+            const Block2D dstBlock = Block2D(size, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows/nranks, ld);
 
             switch (sccltran->type) {
               case SCCL_SEND:
@@ -359,6 +360,12 @@ struct SimpleWrapper2D {
         ALIGN_DOWN(chunkSize, ld);
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rows);
+        //TODO: Make chunkRows a perfect divisor of matrixRows;
+        for (; chunkRows >= 1; chunkRows--) {
+          if (rows % chunkRows == 0) {
+            break;
+          }
+        }
         chunkSize = chunkRows * chunkld;
         numRealChunks = ld/chunkld;
         // if (threadIdx.x == 0) {
