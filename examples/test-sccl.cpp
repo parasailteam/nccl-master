@@ -242,7 +242,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   CUDACHECK(cudaSetDevice(rank % 16));
   
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
-  CollType collType = ReduceScatter;
+  CollType collType = AllReduce;
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
@@ -284,8 +284,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   MPI_Barrier(MPI_COMM_WORLD);
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   
-  int M[] = {8192*1, 16384, 8192*3, 8192*4, 8192*8, 8192 * 10};
-  int N[] = {3072, 3072, 3072, 3072, 3072, 3072, 3072};
+  int M[] = {2*1024, 8192*1, 16384, 8192*3, 8192*4, 8192*8, 8192 * 10};
+  int N[] = {1024, 3072, 3072, 3072, 3072, 3072, 3072, 3072};
   
   for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
     const size_t size = M[i] * N[i];
