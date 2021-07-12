@@ -71,6 +71,9 @@ class scclFunction {
 
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
+
+            //GemmCall Blocks = 0->[2*sizePerScclChunk, chunkSize], 1->[3*sizePerscclchunk, chunkSize]; 
+            //GemmCall = 0->[0, chunkSize], 1->[chunkSize, 2*chunkSize], 
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
 
             int thisCount = min(scclMaxAllowedCount, count-c);
@@ -180,15 +183,17 @@ class scclFunction2D {
 
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
-      const int perRankChunks = DIVUP(rows/nchunksPerLoop, chunkRows)*(ld/chunkld);
-      const int total2DChunks = perRankChunks*nchunksPerLoop;
+      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      const int rowsPerScclChunk =  sizePerScclChunk/ld;
+      const int numScclChunks2D = DIVUP(rowsPerScclChunk, chunkRows)*(ld/chunkld);
+      
       // if (threadIdx.x == 0) {
       //   printf("loopSize %ld total2DChunks %ld sizePerScclChunk %ld\n", loopSize, total2DChunks, sizePerScclChunk);
       // }
       int iter;
 
-      for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < total2DChunks && dstGridChunkIdx < total2DChunks; 
-           srcGridChunkIdx += nchunksPerLoop, dstGridChunkIdx += nchunksPerLoop, iter++) {
+      for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D; 
+           srcGridChunkIdx += 1, dstGridChunkIdx += 1, iter++) {
 
         T* srcPointer, * dstPointer;
 
@@ -209,14 +214,14 @@ class scclFunction2D {
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
 
-          for (int c = 0; c < count; c += scclMaxAllowedCount) {           
-            int dstChunkIdx = dstGridChunkIdx + sccltran->dstoffset + c;
-            int srcChunkIdx = srcGridChunkIdx + (sccltran->srcoffset + c)*perRankChunks;
+          for (int c = 0; c < count; c += scclMaxAllowedCount) {     
+            int dstChunkIdx = dstGridChunkIdx + (sccltran->dstoffset + c)*numScclChunks2D;
+            int srcChunkIdx = srcGridChunkIdx + (sccltran->srcoffset + c)*numScclChunks2D;
             
             int thisCount = min(scclMaxAllowedCount, count-c);
             
-            const Block2D srcBlock = Block2D(size*nranks, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
-            const Block2D dstBlock = Block2D(size, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows/nranks, ld);
+            const Block2D srcBlock = Block2D(sizePerScclChunk, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rowsPerScclChunk, ld);
+            const Block2D dstBlock = Block2D(sizePerScclChunk, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rowsPerScclChunk, ld);
 
             switch (sccltran->type) {
               case SCCL_SEND:
@@ -366,6 +371,7 @@ struct SimpleWrapper2D {
             break;
           }
         }
+        // assert(rows % chunkRows == 0);
         chunkSize = chunkRows * chunkld;
         numRealChunks = ld/chunkld;
         // if (threadIdx.x == 0) {
