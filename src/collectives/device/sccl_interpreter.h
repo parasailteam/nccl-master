@@ -199,8 +199,10 @@ class scclFunction2D {
             
             int thisCount = min(scclMaxAllowedCount, count-c);
             
-            Block2D srcBlock = Block2D(size*nranks, sccltran->srcoffset + c, prims.realChunkSize, prims.numRealChunks, prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
-            Block2D dstBlock = Block2D(size*nranks, sccltran->dstoffset + c, prims.realChunkSize, prims.numRealChunks, prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
+            Block2D srcBlock = Block2D(size*nranks, sccltran->srcoffset + c, prims.realChunkSize, prims.numRealChunks, 
+                                       prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
+            Block2D dstBlock = Block2D(size*nranks, sccltran->dstoffset + c, prims.realChunkSize, prims.numRealChunks, 
+                                       prims.realChunkRows, prims.realChunkCols, prims.ld, gridOffsetStartRow);
 
             switch (sccltran->type) {
               case SCCL_SEND:
