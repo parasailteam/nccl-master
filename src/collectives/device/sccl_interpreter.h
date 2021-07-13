@@ -164,7 +164,10 @@ class scclFunction2D {
       // if (threadIdx.x == 0) {
       //   printf("ld %ld\n", ld);
       // }
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop};
+      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      const int rowsPerScclChunk = sizePerScclChunk/ld;
+
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop, rowsPerScclChunk};
       
       // const int sizePerScclChunk = prims.chunkSize;
       // const ssize_t loopSize = sizePerScclChunk * nchunksPerLoop;
@@ -181,13 +184,12 @@ class scclFunction2D {
 
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
-      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
-      const int rowsPerScclChunk = sizePerScclChunk/ld;
       const int numScclChunks2D = sizePerScclChunk/(chunkld * chunkRows);
-  
+      // printf("sizePerScclChunk %ld chunkld %d chunkRows %d\n", sizePerScclChunk, chunkld, chunkRows);
+      // assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
       int iter;
 
-      for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D; 
+      for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D;
            srcGridChunkIdx += 1, dstGridChunkIdx += 1, iter++) {
 
         T* srcPointer, * dstPointer;
@@ -345,7 +347,7 @@ struct SimpleWrapper2D {
   ncclPrimitives2D<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   __device__ __forceinline__ SimpleWrapper2D(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel,
-                           int ld, int rows, int chunkld, int nchunksPerLoop)
+                           int ld, int rows, int chunkld, int nchunksPerLoop, int rowsPerScclChunk)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       rank(args->comm->rank),
@@ -356,10 +358,10 @@ struct SimpleWrapper2D {
         chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
         ALIGN_DOWN(chunkSize, ld);
         //chunkSize should not have more than 'matrixRows' rows.
-        chunkRows = min((chunkSize/chunkld), (int)rows);
+        chunkRows = min((chunkSize/chunkld), (int)rowsPerScclChunk);
         //TODO: Make chunkRows a perfect divisor of matrixRows;
         for (; chunkRows >= 1; chunkRows--) {
-          if (rows % chunkRows == 0) {
+          if (rowsPerScclChunk % chunkRows == 0) {
             break;
           }
         }
@@ -385,7 +387,7 @@ struct SimpleWrapper2D {
   //   return chunkOffset;
   // }
 
-  const bool toPrint = false;
+  const bool toPrint = true;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
     //assert(srcBlock.isValid());
     // assert(srcBlock.nelem() == 128*1024);
@@ -416,8 +418,8 @@ struct SimpleWrapper2D {
   __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int count) {
     //assert(srcBlock.isValid());
     // assert(srcBlock.nelem() == 128*1024);
-    if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock.nelem(), srcBlock.chunkStartRow, srcBlock.chunkStartCol, srcBlock.chunkRows, srcBlock.chunkCols);
+    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
+      printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
     prims.recvReduceSend(src, srcBlock, 0, srcBlock->nelem()*count);
   }
