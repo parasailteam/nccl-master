@@ -38,7 +38,7 @@ for node in range(nnodes):
                     print('      <step s="{}" type="cpy" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(step, instances*(node*ngpuspernode+g)+ch, instances*(node*ngpuspernode+g)+ch, 1))
                     step += 1
                     for j in range(ngpuspernode):
-                        print('      <step s="{}" type="cpy" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, instances*(ngpuspernode**2+j*ngpuspernode+g)+ch*ngpuspernode, instances*(nghrNode*ngpuspernode+j)+ch*ngpuspernode, ngpuspernode, (instances+g//(ngpuspernode//instances)) if j == 0 else -1, 0 if j == 0 else -1))
+                        print('      <step s="{}" type="cpy" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, instances*(ngpuspernode**2+j*ngpuspernode+g)+ch, instances*(nghrNode*ngpuspernode+j)+ch, 1, instances+(instances*(j*ngpuspernode+g)+ch)//((instances*ngpuspernode**2)//instances), 0))
                         step += 1
                     print('    </tb>')
                     tbindex+=1
