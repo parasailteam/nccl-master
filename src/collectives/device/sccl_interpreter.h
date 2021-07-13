@@ -161,16 +161,12 @@ class scclFunction2D {
       const int rows = (size * nranks)/ld;
       int chunkld = scclAlgo->chunkld;
       int nchunksPerLoop = scclAlgo->nchunksPerLoop;
-      // if (threadIdx.x == 0) {
-      //   printf("ld %ld\n", ld);
-      // }
+
       const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
       const int rowsPerScclChunk = sizePerScclChunk/ld;
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop, rows};
       
-      // const int sizePerScclChunk = prims.chunkSize;
-      // const ssize_t loopSize = sizePerScclChunk * nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
@@ -280,7 +276,7 @@ protected:
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-            //  ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, realSize);
+              ReduceOrCopyMulti2D<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, SRC, DST, Block2D>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
             }
           } else {
             ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
@@ -359,38 +355,18 @@ struct SimpleWrapper2D {
         ALIGN_DOWN(chunkSize, ld);
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rowsPerScclChunk);
-        //TODO: Make chunkRows a perfect divisor of matrixRows;
+        //Make chunkRows a perfect divisor of matrixRows;
         for (; chunkRows >= 1; chunkRows--) {
           if (rowsPerScclChunk % chunkRows == 0) {
             break;
           }
         }
-        // assert(rows % chunkRows == 0);
-        // if (threadIdx.x == 0) {
-        //   printf("%d %d stepSize %d buffsize %d\n", chunkSize, chunkRows, (int)stepSize, (int)args->comm->buffSizes[NCCL_PROTO_SIMPLE]);
-        // }
         chunkSize = chunkRows * chunkld;
         numRealChunks = ld/chunkld;
-        // if (threadIdx.x == 0) {
-        //   printf("chunkRows %d %d\n", chunkRows, chunkSize);
-        // }
       }
-
-  // __device__ __forceinline__ size_t initIter(ssize_t sizePerScclChunk, ssize_t gridOffset) {
-  //   realChunkSize = min(chunkSize, sizePerScclChunk-gridOffset);
-  //   ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-  //   ssize_t chunkOffset = gridOffset;
-  //   nelem = min(realChunkSize, sizePerScclChunk-chunkOffset);
-  //   realChunkRows = realChunkSize/realChunkCols;
-    
-
-  //   return chunkOffset;
-  // }
 
   const bool toPrint = true;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
-    //assert(srcBlock.isValid());
-    // assert(srcBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
@@ -398,8 +374,6 @@ struct SimpleWrapper2D {
   }
 
   __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int count) {
-    //assert(dstBlock.isValid());
-    // assert(dstBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
@@ -407,8 +381,6 @@ struct SimpleWrapper2D {
   }
 
   __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int count) {
-    //assert(dstBlock.isValid());
-    // assert(dstBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
       // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
     }
@@ -416,8 +388,6 @@ struct SimpleWrapper2D {
   }
   
   __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int count) {
-    //assert(srcBlock.isValid());
-    // assert(srcBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
@@ -425,9 +395,6 @@ struct SimpleWrapper2D {
   }
 
   __device__ __forceinline__ void recvReduceCopy(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
-    //assert(dstBlock.isValid()); assert(srcBlock.isValid());
-    // assert(srcBlock.nelem() == 128*1024);
-    // assert(dstBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
        printf("%d [%d, %d] step %d nelem %d, src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols,
        dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
@@ -436,9 +403,6 @@ struct SimpleWrapper2D {
   }
   
   __device__ __forceinline__ void recvReduceCopySend(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
-    //assert(dstBlock.isValid()); assert(srcBlock.isValid());
-    // assert(srcBlock.nelem() == 128*1024);
-    // assert(dstBlock.nelem() == 128*1024);
     if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
       // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
     }
