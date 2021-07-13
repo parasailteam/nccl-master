@@ -167,7 +167,7 @@ class scclFunction2D {
       const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
       const int rowsPerScclChunk = sizePerScclChunk/ld;
 
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop, rowsPerScclChunk};
+      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop, rows};
       
       // const int sizePerScclChunk = prims.chunkSize;
       // const ssize_t loopSize = sizePerScclChunk * nchunksPerLoop;
@@ -186,7 +186,7 @@ class scclFunction2D {
       int dstGridChunkIdx = 0;
       const int numScclChunks2D = sizePerScclChunk/(chunkld * chunkRows);
       // printf("sizePerScclChunk %ld chunkld %d chunkRows %d\n", sizePerScclChunk, chunkld, chunkRows);
-      // assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
+     // assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
       int iter;
 
       for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D;
