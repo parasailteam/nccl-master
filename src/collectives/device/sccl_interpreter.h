@@ -185,8 +185,8 @@ class scclFunction2D {
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
       const int numScclChunks2D = sizePerScclChunk/(chunkld * chunkRows);
-      // printf("sizePerScclChunk %ld chunkld %d chunkRows %d\n", sizePerScclChunk, chunkld, chunkRows);
-     // assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
+      if (threadIdx.x == 0) printf("sizePerScclChunk %ld chunkld %d chunkRows %d\n", sizePerScclChunk, chunkld, chunkRows);
+      assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
       int iter;
 
       for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D;
@@ -400,8 +400,8 @@ struct SimpleWrapper2D {
   __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int count) {
     //assert(dstBlock.isValid());
     // assert(dstBlock.nelem() == 128*1024);
-    if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
+    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
+      printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
     prims.recv(dst, dstBlock, 0, dstBlock->nelem()*count);
   }

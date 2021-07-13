@@ -242,7 +242,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   CUDACHECK(cudaSetDevice(rank % 16));
   
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
-  CollType collType = ReduceScatter;
+  CollType collType = AllGather;
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
@@ -410,8 +410,12 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
       printf("Success time %d x %d: %f\n", M[i], N[i], elapsedTime);
       //free device buffers
-      CUDACHECK(cudaFree(minibatch_gradients));
-      CUDACHECK(cudaFree(allreduced_gradient));
+      if (collType != AllGather) {
+        CUDACHECK(cudaFree(minibatch_gradients));
+        CUDACHECK(cudaFree(allreduced_gradient));
+      } else {
+        CUDACHECK(cudaFree(allreduced_gradient));
+      }
       CUDACHECK(cudaStreamDestroy(s));
   }
 
