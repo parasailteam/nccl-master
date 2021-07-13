@@ -1,6 +1,6 @@
-nnodes = 1
+nnodes = 9
 ngpuspernode = 8
-instances = 1
+instances = 2
 nchunksperloop = nnodes*ngpuspernode*instances
 print('<algo name="test" nchunksperloop="{}" nchannels="{}" proto="Simple">'.format(nchunksperloop, instances))
 
