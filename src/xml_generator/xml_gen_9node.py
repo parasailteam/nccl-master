@@ -45,17 +45,17 @@ for node in range(nnodes):
             else:
                 for ch in range(instances):
                     print('    <tb id="{}" send="{}" recv="-1" chan="{}">'.format(tbindex, node*ngpuspernode+withinnodenghr, ch))
-                    print('      <step s="0" type="s" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(instances*withinNghrNode*ngpuspernode+ch, instances*g*ngpuspernode+ch, ngpuspernode))
+                    print('      <step s="0" type="s" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(instances*withinNghrNode*ngpuspernode+ch*ngpuspernode, instances*g*ngpuspernode+ch*ngpuspernode, ngpuspernode))
                     print('      <step s="1" type="s" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(instances*(node*ngpuspernode+withinnodenghr)+ch, instances*(node*ngpuspernode+g)+ch, 1))
                     step = 2
                     for j in range(ngpuspernode):
-                        print('      <step s="{}" type="s" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, instances*(ngpuspernode**2+j*ngpuspernode+withinnodenghr)+ch, instances*(nghrNode*ngpuspernode+j)+ch, 1, instances+withinnodenghr//(ngpuspernode//instances) if j == 0 else -1, 0 if j == 0 else -1))
+                        print('      <step s="{}" type="s" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, instances*(ngpuspernode**2+j*ngpuspernode+withinnodenghr)+ch, instances*(nghrNode*ngpuspernode+j)+ch, 1, instances+(instances*(j*ngpuspernode+withinnodenghr)+ch)//((instances*ngpuspernode**2)//instances), 0))
                         step += 1
                     print('    </tb>')
                     tbindex+=1
                 for ch in range(instances):
                     print('    <tb id="{}" send="-1" recv="{}" chan="{}">'.format(tbindex, node*ngpuspernode+withinnodenghr, ch))
-                    print('      <step s="0" type="r" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="1"/>'.format(instances*nghrNode*ngpuspernode+ch, instances*withinnodenghr*ngpuspernode+ch, ngpuspernode))
+                    print('      <step s="0" type="r" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="1"/>'.format(instances*nghrNode*ngpuspernode+ch*ngpuspernode, instances*withinnodenghr*ngpuspernode+ch*ngpuspernode, ngpuspernode))
                     print('      <step s="1" type="r" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(instances*(node*ngpuspernode+g)+ch, instances*(node*ngpuspernode+withinnodenghr)+ch, 1))
                     step = 2
                     for j in range(ngpuspernode):
