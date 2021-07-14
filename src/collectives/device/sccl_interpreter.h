@@ -162,7 +162,7 @@ class scclFunction2D {
       int chunkld = scclAlgo->chunkld;
       int nchunksPerLoop = scclAlgo->nchunksPerLoop;
 
-      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop; //size*nranks = 8192 * 3072; nchunksperloop = 16 * 12 or 16 * 24 = 384
       const int rowsPerScclChunk = sizePerScclChunk/ld;
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, ld, rows, chunkld, nchunksPerLoop, rows};
@@ -173,6 +173,9 @@ class scclFunction2D {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
+//  2D Chunk equiv of 1D Chunk of 64K with 1024 Matrix Cols = 64 x 1024
+//  2D Chunk of 64K can be = 64 x 1024, 128 x 512, 256 x 256
+
       auto chunkSize = prims.chunkSize;
       auto numChunks = prims.numRealChunks;
       auto chunkRows = prims.chunkRows;
@@ -180,9 +183,10 @@ class scclFunction2D {
 
       int srcGridChunkIdx = 0;
       int dstGridChunkIdx = 0;
-      const int numScclChunks2D = sizePerScclChunk/(chunkld * chunkRows);
-      if (threadIdx.x == 0) printf("sizePerScclChunk %ld chunkld %d chunkRows %d\n", sizePerScclChunk, chunkld, chunkRows);
-      assert(sizePerScclChunk % (chunkld * chunkRows) == 0);
+      const int numTotalChunks = (rows/chunkRows * ld/chunkld);
+      const int numScclChunks2D = numTotalChunks/scclAlgo->nchunksPerLoop;
+      if (threadIdx.x == 0) printf("numScclChunks2D %d numTotalChunks %d chunkld %d chunkRows %d\n", numScclChunks2D, numTotalChunks, sizePerScclChunk, chunkld, chunkRows);
+      assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
       int iter;
 
       for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D;

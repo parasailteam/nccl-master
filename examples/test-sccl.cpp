@@ -242,7 +242,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   CUDACHECK(cudaSetDevice(rank % 16));
   
   enum CollType {AllGather, ReduceScatter, AllReduce} ;
-  CollType collType = AllGather;
+  CollType collType = AllReduce;
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));

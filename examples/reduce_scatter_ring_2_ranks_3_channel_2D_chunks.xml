@@ -1,0 +1,30 @@
+<algo name="test_2_ring8" nchunksperloop="6" nchannels="3" redop="sum" chunkld="3072" proto="Simple">
+  <gpu id="0" i_chunks="6" o_chunks="3" s_chunks="0">
+    <tb id="0" send="1" recv="1" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="3" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="0" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+    <tb id="1" send="1" recv="1" chan="1">
+      <step s="0" type="s" srcbuf="i" srcoff="4" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="1" dstbuf="o" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+    <tb id="2" send="1" recv="1" chan="2">
+      <step s="0" type="s" srcbuf="i" srcoff="5" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="2" dstbuf="o" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+  </gpu>
+  <gpu id="1" i_chunks="6" o_chunks="3" s_chunks="0">
+    <tb id="0" send="0" recv="0" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="0" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="3" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+    <tb id="1" send="0" recv="0" chan="1">
+      <step s="0" type="s" srcbuf="i" srcoff="1" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="4" dstbuf="o" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+    <tb id="2" send="0" recv="0" chan="2">
+      <step s="0" type="s" srcbuf="i" srcoff="2" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+      <step s="1" type="rrc" srcbuf="i" srcoff="5" dstbuf="o" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0"/>
+    </tb>
+  </gpu>
+</algo>
