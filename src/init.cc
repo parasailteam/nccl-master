@@ -969,12 +969,13 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   return ncclSuccess;
 }
 
-NCCL_API(ncclResult_t, ncclCommInitRankWithScclXML, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile);
-ncclResult_t ncclCommInitRankWithScclXML(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile) {
+NCCL_API(ncclResult_t, ncclCommInitRankWithScclXML, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile, scclAlgorithm_t* scclAlgorithm);
+ncclResult_t ncclCommInitRankWithScclXML(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, const char* xmlFile, scclAlgorithm_t* scclAlgorithm) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   int cudaDev;
   CUDACHECK(cudaGetDevice(&cudaDev));
   NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, xmlFile));
+  *scclAlgorithm = &(*newcomm)->scclAlgo;
   return ncclSuccess;
 }
 
@@ -1015,6 +1016,7 @@ ncclResult_t ncclCommInitAllWithScclXML(ncclComm_t* comms, int ndev, const int* 
     ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i, xmlFile);
   }
   NCCLCHECK(ncclGroupEnd());
+
   return ncclSuccess;
 }
 

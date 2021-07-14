@@ -3,6 +3,13 @@ all: test-sccl
 test-sccl: test-sccl.cpp
 	mpicxx $< -I/usr/local/cuda/include/ -I../build/include/ -L../build/lib/ -L/usr/local/cuda/lib64/ -lcudart -lnccl -lcublas -o $@ -Wall -lcurand -std=c++11  -O0 -g
 
+test-sccl-cutlass: test-sccl-cutlass.cu cutlass-matmul.h
+	nvcc test-sccl-cutlass.cu -arch=sm_70 -O3 -Xptxas -O3 -DNDEBUG -std=c++11 -Xcompiler -fopenmp,-O3 -lcudadevrt -lcudart -I/usr/include/x86_64-linux-gnu/mpi -I.. \
+	-I/usr/local/cuda/include/ -I ../build/include/ -I ../../cutlass/include -I ../../cutlass/tools/util/include -I ../../cutlass/examples/common -L../build/lib/ -L/usr/local/cuda/lib64/ -lnccl -lcublas -lcurand -c && \
+	mpicxx test-sccl-cutlass.o -I/usr/local/cuda/include/ -I../build/include/ -L../build/lib/ -L/usr/local/cuda/lib64/ -lcudart -lnccl -lcublas -Wall -lcurand -lcudadevrt -std=c++11 -fopenmp -o test-sccl-cutlass
+
+test-sccl-cutlass-run: test-sccl-cutlass
+	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=1 -x NCCL_MAX_NCHANNELS=1 ./test-sccl-cutlass
 
 test-sccl-run: test-sccl
 	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=1 -x NCCL_MAX_NCHANNELS=1 ./test-sccl
