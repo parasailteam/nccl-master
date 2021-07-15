@@ -7,8 +7,10 @@
 #include <curand.h>
 #include <mpi.h>
 #include <stdlib.h>
-       #include <unistd.h>
+#include <unistd.h>
 
+#include "header.h"
+#include "cutlass-matmul.h"
 
 #define CURANDCHECK(x) do { if((x) != CURAND_STATUS_SUCCESS) { \
   printf("Error at %s:%d\n",__FILE__,__LINE__);            \
@@ -41,20 +43,6 @@
     exit(EXIT_FAILURE);                             \
   }                                                 \
 } while(0)
-
-
-
-// #include "header.h"
-
-float absRelDiff(float u, float v) {
-  return abs((u-v)/u);
-}
-bool eqFloat(float u, float v) {
-  if (u == 0.0f || v == 0.0f)
-    return u == v;
-  return absRelDiff(u, v) <= 1e-5;
-}
-
 
 //Check results of each epoch
 template<class T>
@@ -183,43 +171,6 @@ void traditional_weight_update(const ncclComm_t& comm, const uint64_t size,
 }
 
 template<class T>
-void cudaMemRandInt(T* dst, size_t nelems)
-{
-  curandGenerator_t gen;
-  CURANDCHECK(curandCreateGenerator(&gen,
-                                    CURAND_RNG_PSEUDO_DEFAULT));
-  CURANDCHECK(curandSetPseudoRandomGeneratorSeed(gen, 1234ULL));
-  if (sizeof(T) == sizeof(float))
-    CURANDCHECK(curandGenerateUniform(gen, (float*)dst, nelems));
-  else
-    CURANDCHECK(curandGenerateUniformDouble(gen, (double*)dst, nelems));
-  CURANDCHECK(curandDestroyGenerator(gen));
-}
-
-// template<class T>
-// __global__ void gpu_memset_kernel(T* f, T v, size_t nelems)
-// {
-//   uint idx = threadIdx.x + blockIdx.x*blockDim.x;
-//   if (idx >= nelems)
-//     return;
-  
-//   f[idx] = v;
-// }
-
-template<class T>
-void memset_value(T*f, T v, size_t nelems) 
-{
-  T* h_buff = (T*)malloc(sizeof(T)*nelems);
-
-  for (uint64_t i = 0; i < nelems; i++) {
-    h_buff[i] = v;
-  }
-
-  CUDACHECK(cudaMemcpy(f, h_buff, sizeof(T)*nelems, cudaMemcpyHostToDevice));
-  free(h_buff);
-}
-
-template<class T>
 void memset_identity(T*f, size_t nelems) 
 {
   T* h_buff = (T*)malloc(sizeof(T)*nelems);
@@ -273,7 +224,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   scclAlgorithm_t scclAlgo;
   ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename, &scclAlgo);
   MPI_Barrier(MPI_COMM_WORLD);
-  
+
   if (rank == -1) {
     printf("PID %d on ready for attach\n", getpid());
     fflush(stdout);
@@ -285,12 +236,15 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
   MPI_Barrier(MPI_COMM_WORLD);
   // gpu_memset_kernel<<<size/256 + 1,256, 0, s>>>(minibatch_gradients, (T)rank, size);
   
-  int M[] = {1024, 8192*1, 16384, 8192*3, 8192*4, 8192*8, 8192 * 10};
-  int N[] = {3072, 3072, 3072, 3072, 3072, 3072, 3072, 3072};
+  int M[] = {8*1024, 16*1024, 32*1024, 64*1024};
+  int N[] = {3072, 3072, 3072, 3072, 3072};
   
   for (int i = 0; i < sizeof(M)/sizeof(int); i++) {
     const size_t size = M[i] * N[i];
     if (rank == 0) printf("size %d\n", size);
+    cutlassGeMM(M[i], N[i], 3072/4, rank, scclAlgo);
+
+    continue;
     //allocating and initializing device buffers
     T* minibatch_gradients;
     T* allreduced_gradient;
@@ -411,12 +365,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
       printf("Success time %d x %d: %f\n", M[i], N[i], elapsedTime);
       //free device buffers
-      if (collType != AllGather) {
-        CUDACHECK(cudaFree(minibatch_gradients));
-        CUDACHECK(cudaFree(allreduced_gradient));
-      } else {
-        CUDACHECK(cudaFree(allreduced_gradient));
-      }
+      CUDACHECK(cudaFree(minibatch_gradients));
+      CUDACHECK(cudaFree(allreduced_gradient));
       CUDACHECK(cudaStreamDestroy(s));
   }
 

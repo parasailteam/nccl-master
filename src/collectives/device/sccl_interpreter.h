@@ -112,7 +112,7 @@ class scclFunction {
 
 //Represents a 2D chunk
 struct Block2D {
-  int chunkStartRow;
+  int chunkStartRow; //Remove chunk from each variable name
   int chunkStartCol;
   int chunkRows;
   int chunkCols;
@@ -181,16 +181,14 @@ class scclFunction2D {
       auto chunkRows = prims.chunkRows;
       auto chunkCols = chunkld;
 
-      int srcGridChunkIdx = 0;
-      int dstGridChunkIdx = 0;
+      int gridChunkIdx = 0;
       const int numTotalChunks = (rows/chunkRows * ld/chunkld);
       const int numScclChunks2D = numTotalChunks/scclAlgo->nchunksPerLoop;
       if (threadIdx.x == 0) printf("numScclChunks2D %d numTotalChunks %d chunkld %d chunkRows %d\n", numScclChunks2D, numTotalChunks, sizePerScclChunk, chunkld, chunkRows);
       assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
       int iter;
 
-      for (iter = 0, srcGridChunkIdx = 0, dstGridChunkIdx = 0; srcGridChunkIdx < numScclChunks2D && dstGridChunkIdx < numScclChunks2D;
-           srcGridChunkIdx += 1, dstGridChunkIdx += 1, iter++) {
+      for (iter = 0, gridChunkIdx = 0; gridChunkIdx < numScclChunks2D; gridChunkIdx += 1, iter++) {
 
         T* srcPointer, * dstPointer;
 
@@ -212,8 +210,8 @@ class scclFunction2D {
           int count = sccltran->count;
 
           for (int c = 0; c < count; c += scclMaxAllowedCount) {     
-            int dstChunkIdx = dstGridChunkIdx + (sccltran->dstoffset + c)*numScclChunks2D;
-            int srcChunkIdx = srcGridChunkIdx + (sccltran->srcoffset + c)*numScclChunks2D;
+            int dstChunkIdx = gridChunkIdx + (sccltran->dstoffset + c)*numScclChunks2D;
+            int srcChunkIdx = gridChunkIdx + (sccltran->srcoffset + c)*numScclChunks2D;
             
             int thisCount = min(scclMaxAllowedCount, count-c);
             
@@ -366,6 +364,8 @@ struct SimpleWrapper2D {
           }
         }
         chunkSize = chunkRows * chunkld;
+        // chunkSize = getSCCLChunkSize<T>(args->comm->buffSizes[NCCL_PROTO_SIMPLE], ld*rows, rows, ld, chunkld, nchunksPerLoop);
+        chunkRows = chunkSize/chunkld;
         numRealChunks = ld/chunkld;
       }
 

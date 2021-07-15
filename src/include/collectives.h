@@ -79,4 +79,22 @@ DECL_ALL
 #define SCCL_CHUNKSTEPS (NCCL_STEPS/2)
 #define SENDRECV_SLICEFACTOR 4
 
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+template<typename T>
+static __device__ __host__ int getSCCLChunkSize(int buffSize, size_t size, int rows, int cols, int chunkCols, int nchunksPerLoop) {
+  const int stepSize = buffSize / (sizeof(T)*NCCL_STEPS);
+  int chunkSize = MIN(stepSize * SCCL_CHUNKSTEPS, DIVUP((cols*rows),nchunksPerLoop));
+  ALIGN_DOWN(chunkSize, cols);
+  //chunkSize should not have more than 'matrixRows' rows.
+  int chunkRows = MIN((chunkSize/chunkCols), (int)rows);
+  //Make chunkRows a perfect divisor of matrixRows;
+  for (; chunkRows >= 1; chunkRows--) {
+    if (rows % chunkRows == 0) {
+      break;
+    }
+  }
+  chunkSize = chunkRows * chunkCols;
+  return chunkSize;
+}
+
 #endif
