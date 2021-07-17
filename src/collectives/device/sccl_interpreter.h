@@ -142,7 +142,7 @@ class scclFunction2D {
       struct ncclDevComm* comm = args->comm;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
       const int tid = threadIdx.x;
-      const int sync_tid = args->nThreads-1; // last thread is most likely not doing anthing and used for SCCL cross thread synchronization //TODO: replacce nthreads by blockDim.x?
+      const int sync_tid = args->nThreads-1; // last thread is most likely not doing anthing and used for SCCL cross thread synchronization
       const int bid = blockIdx.x;
       struct scclThreadBlock* scclTB = &scclAlgo->scclTB[bid];
       const int channelId = scclTB->channelId;
@@ -184,7 +184,7 @@ class scclFunction2D {
       int gridChunkIdx = 0;
       const int numTotalChunks = (rows/chunkRows * ld/chunkld);
       const int numScclChunks2D = numTotalChunks/scclAlgo->nchunksPerLoop;
-      if (threadIdx.x == 0) printf("numScclChunks2D %d numTotalChunks %d chunkld %d chunkRows %d\n", numScclChunks2D, numTotalChunks, sizePerScclChunk, chunkld, chunkRows);
+      // if (threadIdx.x == 0) printf("numScclChunks2D %d numTotalChunks %d chunkld %d chunkRows %d\n", numScclChunks2D, numTotalChunks, sizePerScclChunk, chunkld, chunkRows);
       assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
       int iter;
 
@@ -197,7 +197,7 @@ class scclFunction2D {
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
           int8_t dependentStep = sccltran->dependentStep;
-          if (sccltran->dependentBid >= 0){
+          if (false && dependentBid >= 0){//TODO: Remove it after info
               if (tid == sync_tid){
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
               while ((scclFlags + dependentBid)->flag < goalFlag){};
@@ -369,7 +369,7 @@ struct SimpleWrapper2D {
         numRealChunks = ld/chunkld;
       }
 
-  const bool toPrint = true;
+  const bool toPrint = false;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);

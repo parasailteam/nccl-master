@@ -128,6 +128,8 @@ int main(int argc, char** argv){
     int MODEL_PARALLEL_GPUS[] = {16, 16, 16, 16};
     float MODEL_PARAMS[] = {137, 137, 137, 137};
   #endif
+  
+  int workIndex = 0;
 
   for (int model = 0; model < sizeof(HIDDEN_DIMENSIONS)/sizeof(HIDDEN_DIMENSIONS[0]); model++) {
     for (int matMulType = 1; matMulType < 2; matMulType++) {
@@ -201,20 +203,24 @@ int main(int argc, char** argv){
                                            {alpha, beta},          // <- tuple of alpha and beta
                                            split_k_slices};        // <- k-dimension split factor
 
+
+        ncclCustomCollective2DInfo(m1m2, N, M*N, ncclHalf, comm, stream);
+        CUDACHECK(cudaDeviceSynchronize());
+        // Instantiate CUTLASS kernel depending on templates
+        SCCLGemm gemm_op;
+
         // Using the arguments, query for extra workspace required for matrix multiplication computation
-        size_t workspace_size = SCCLGemm::get_workspace_size(arguments);
+        size_t workspace_size = gemm_op.get_workspace_size(arguments);
 
         // Allocate workspace memory
         cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
 
-        // Instantiate CUTLASS kernel depending on templates
-        SCCLGemm gemm_op;
+
 
         // Check the problem size is supported or not 
         cutlass::Status status = gemm_op.can_implement(arguments);
-        CUTLASS_CHECK(status);
-
-        status = gemm_op.initialize(arguments, workspace.get());
+        CUTLASS_CHECK(status)
+        status = gemm_op.initialize(arguments, workIndex, workspace.get());
         CUTLASS_CHECK(status);
 // cudaProfilerStart();
           // CUDACHECK(cudaFuncSetAttribute(dummyKernel<80>,
@@ -248,12 +254,14 @@ int main(int argc, char** argv){
           CUDACHECK(cudaEventRecord(cutlassStartPipe, cutlassStream));
 
           double t1 = getCurrentTime();     
-          NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, 
-                  (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
-          
-          status = gemm_op(iter, cutlassStream);
+                    
+          status = gemm_op(cutlassStream);
           CUTLASS_CHECK(status);
 
+          CUDACHECK(cudaDeviceSynchronize());
+          NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, 
+                  (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
+          CUDACHECK(cudaDeviceSynchronize());
           // NCCLCHECK(ncclAllReduceMatrix(m1m2, M*N, M, N, N, ncclHalf, ncclSum, comm, stream));
 
           // Wait for kernels to finish
@@ -307,6 +315,7 @@ int main(int argc, char** argv){
               sampleTime = 0;//(t2-t1)*1000.0f;
             }
           }
+          workIndex++;
           if (iter == 0) 
           { 
             MPI_Barrier(MPI_COMM_WORLD);
