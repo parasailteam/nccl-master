@@ -9,7 +9,9 @@
 
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
+#include <sys/types.h>
 
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define NCCL_MAJOR ${nccl:Major}
 #define NCCL_MINOR ${nccl:Minor}
 #define NCCL_PATCH ${nccl:Patch}
@@ -21,6 +23,38 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+//Represents a 2D chunk
+struct Block2D {
+  int chunkStartRow; //Remove chunk from each variable name
+  int chunkStartCol;
+  int chunkRows;
+  int chunkCols;
+
+  __device__ __host__ __forceinline__ Block2D(const ssize_t size, const int chunkIdx, const int chunkSize, const int numChunks, 
+                                     const int chunkRows, const int chunkCols, const int rows, const int ld) {
+    chunkStartRow = chunkIdx / numChunks * chunkRows;
+    chunkStartCol = chunkIdx % numChunks * chunkCols;
+    int nelem = MIN(chunkSize, (int)(size - (chunkStartRow * ld + (rows - chunkStartRow) * (ld - (ld - chunkStartCol)))));
+    this->chunkRows = MIN(MIN(nelem/chunkCols, chunkRows), rows - chunkStartRow);
+    this->chunkCols = chunkCols;
+  }
+
+  __device__ __host__ __forceinline__ Block2D() :
+    chunkStartRow(-1), chunkStartCol(-1), chunkRows(-1), chunkCols(-1)
+  {}
+  __device__ __host__ __forceinline__
+  bool isValid() const {return chunkStartCol >= 0 && chunkStartRow >= 0 && chunkRows > 0 && chunkCols > 0;}
+  __device__ __host__ __forceinline__ 
+  int nelem() const {return chunkRows * chunkCols;}
+};
+
+struct NCCLChunk {
+  Block2D chunk;
+  int iter;
+  int step;
+  int bid;
+};
 
 /* Opaque handle to communicator */
 typedef struct ncclComm* ncclComm_t;

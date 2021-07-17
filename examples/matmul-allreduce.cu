@@ -194,18 +194,29 @@ int main(int argc, char** argv){
         // Split K dimension into 1 partitions
         int split_k_slices = 1;
 
-        typename SCCLGemm::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
-                                           tensor_a,  // <- reference to matrix A on device
-                                           tensor_b,  // <- reference to matrix B on device
-                                           tensor_c,  // <- reference to matrix C on device
-                                           tensor_d,  // <- reference to matrix D on device
-                                           scclAlgo,
-                                           {alpha, beta},          // <- tuple of alpha and beta
-                                           split_k_slices};        // <- k-dimension split factor
-
-
-        ncclCustomCollective2DInfo(m1m2, N, M*N, ncclHalf, comm, stream);
+        NCCLChunk* dNCCLChunks;
+        const int numNCCLChunks = 24 * 128 * 512;
+        printf("sizeof cunkinfo %ld\n", sizeof(NCCLChunk) * numNCCLChunks);
+        CUDACHECK(cudaMalloc(&dNCCLChunks, sizeof(NCCLChunk) * numNCCLChunks));
+        
+        ncclCustomCollective2DInfo(dNCCLChunks, N, (M*N)/comm_size, ncclHalf, comm, stream);
         CUDACHECK(cudaDeviceSynchronize());
+        printf("204\n");
+        std::vector<NCCLChunk> hNCCLChunks = std::vector<NCCLChunk>(numNCCLChunks);
+        CUDACHECK(cudaMemcpy(&hNCCLChunks[0], dNCCLChunks, sizeof(NCCLChunk) * numNCCLChunks, cudaMemcpyDeviceToHost));
+        CUDACHECK(cudaFree(dNCCLChunks));
+
+        typename SCCLGemm::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
+                                          tensor_a,  // <- reference to matrix A on device
+                                          tensor_b,  // <- reference to matrix B on device
+                                          tensor_c,  // <- reference to matrix C on device
+                                          tensor_d,  // <- reference to matrix D on device
+                                          scclAlgo,
+                                          hNCCLChunks,
+                                          {alpha, beta},          // <- tuple of alpha and beta
+                                          split_k_slices};        // <- k-dimension split factor
+
+
         // Instantiate CUTLASS kernel depending on templates
         SCCLGemm gemm_op;
 
