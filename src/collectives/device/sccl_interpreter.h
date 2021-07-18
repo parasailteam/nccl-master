@@ -395,7 +395,7 @@ struct SimpleWrapper2D {
 template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives2DInfo {
 protected:
-  int iter;
+int iter;
 public:
   size_t matrixRows, matrixCols;
 
@@ -403,45 +403,6 @@ public:
   ncclPrimitives2DInfo(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group):
     iter(0)
   {}
-  
-  __device__ __forceinline__ void 
-  pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo, int offset) {
-    if (threadIdx.x == 0) {
-      chunkInfos[iter++] = chunkInfo;
-      //Always set next NCCLChunk as invalid because this is an "invalid block" terminated array
-      chunkInfos[iter + 1] = NCCLChunk{Block2D(), -1, -1}; 
-    }
-  }
-
-  __device__ __forceinline__ void
-  send(const T* src, const NCCLChunk srcBlock, int offset, int nelem) {
-    pushChunkInfo((NCCLChunk*)src, srcBlock, offset);
-  }
-
-  __device__ __forceinline__ void
-  recv(T* dst, const NCCLChunk dstBlock, int offset, int nelem) {
-    //No need to add dstBlock
-  }
-
-  __device__ __forceinline__ void
-  recvCopySend(T* dst, const NCCLChunk srcBlock, int offset, int nelem) {
-    //Not adding dstBlock
-  }
-
-  __device__ __forceinline__ void
-  recvReduceCopy(const T* src, T* dst, const NCCLChunk srcBlock, const NCCLChunk dstBlock, int offset, int nelem) {
-    pushChunkInfo((NCCLChunk*)src, srcBlock, offset);
-  }
-
-  __device__ __forceinline__ void
-  recvReduceSend(const T* src, const NCCLChunk srcBlock, int offset, int nelem) {
-    pushChunkInfo((NCCLChunk*)src, srcBlock, offset);
-  }
-
-  __device__ __forceinline__ void
-  recvReduceCopySend(const T* src, T* dst, const NCCLChunk srcBlock, const NCCLChunk dstBlock, int offset, int nelem) {
-    pushChunkInfo((NCCLChunk*)src, srcBlock, offset);
-  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -455,15 +416,13 @@ struct SimpleWrapper2DInfo {
   int iter;
   int currStep;
   int outputOffset;
-
-  ncclPrimitives2DInfo<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
+  int numNCCLChunks;
 
   __device__ __forceinline__ SimpleWrapper2DInfo(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel,
                            int ld, int rows, int chunkld, int nchunksPerLoop, int rowsPerScclChunk, struct scclAlgorithm* scclAlgo)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
-      rank(args->comm->rank),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
+      rank(args->comm->rank), numNCCLChunks(0) {
         prims.matrixRows = rows;
         prims.matrixCols = ld;
         //Align chunk size to the number of columns.
@@ -487,9 +446,7 @@ struct SimpleWrapper2DInfo {
           maxSteps = MAX(maxSteps, scclTB->nsteps);
         }
         const int perChannelNCCLChunks = SCCL_MAX_ITER * maxSteps;
-        outputOffset = perChannelNCCLChunks;
-        if (threadIdx.x == 0)
-        printf("outputOffset %d\n", outputOffset);
+        outputOffset = blockIdx.x*perChannelNCCLChunks;
       }
 
     __device__ __forceinline__ void initIter(int iter, int step) {
@@ -497,34 +454,43 @@ struct SimpleWrapper2DInfo {
       currStep = step;
     }
 
+  __device__ __forceinline__ void 
+  pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo) {
+    if (threadIdx.x == 0) {
+      chunkInfos[numNCCLChunks++] = chunkInfo;
+      //Always set next NCCLChunk as invalid because this is an "invalid block" terminated array
+      chunkInfos[numNCCLChunks + 1] = NCCLChunk{Block2D(), -1, -1}; 
+    }
+  }
+
     //TODO: No need to call prims.<functions> 
   const bool toPrint = false;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
     if (toPrint && rank == 0 && threadIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
-    prims.send((T*)((NCCLChunk*)src + blockIdx.x*outputOffset), NCCLChunk{*srcBlock, iter, step, blockIdx.x}, 0, srcBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)src + outputOffset, NCCLChunk{*srcBlock, iter, step, blockIdx.x});
   }
 
   __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int count) {
     if (toPrint && rank == 0 && threadIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
-    prims.recv((T*)((NCCLChunk*)dst + blockIdx.x*outputOffset), NCCLChunk{*dstBlock, iter, step, blockIdx.x}, 0, dstBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
 
   __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int count) {
     if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
       // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
     }
-    prims.recvCopySend((T*)((NCCLChunk*)dst + blockIdx.x*outputOffset), NCCLChunk{*dstBlock, iter, step, blockIdx.x}, 0, dstBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
   
   __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int count) {
     if (toPrint && rank == 0 && threadIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
-    prims.recvReduceSend((T*)((NCCLChunk*)src + blockIdx.x*outputOffset), NCCLChunk{*srcBlock, iter, step, blockIdx.x}, 0, srcBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)src + outputOffset, NCCLChunk{*srcBlock, iter, step, blockIdx.x});
   }
 
   __device__ __forceinline__ void recvReduceCopy(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
@@ -532,14 +498,16 @@ struct SimpleWrapper2DInfo {
        printf("%d [%d, %d] step %d nelem %d, src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols,
        dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
-    prims.recvReduceCopy((T*)((NCCLChunk*)src +blockIdx.x* outputOffset), (T*)((NCCLChunk*)dst + blockIdx.x*outputOffset), NCCLChunk{*srcBlock, iter, step, blockIdx.x}, NCCLChunk{*dstBlock, iter, step}, 0, dstBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)src + outputOffset, NCCLChunk{*srcBlock, iter, step, blockIdx.x});
+    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
   
   __device__ __forceinline__ void recvReduceCopySend(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
     if (toPrint && rank == 0 && threadIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
-    prims.recvReduceCopySend((T*)((NCCLChunk*)src + blockIdx.x*outputOffset), (T*)((NCCLChunk*)dst + blockIdx.x * outputOffset), NCCLChunk{*srcBlock, iter, step, blockIdx.x}, NCCLChunk{*dstBlock, iter, step}, 0, dstBlock->nelem()*count);
+    pushChunkInfo((NCCLChunk*)src + outputOffset, NCCLChunk{*srcBlock, iter, step, blockIdx.x});
+    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
 };
 
