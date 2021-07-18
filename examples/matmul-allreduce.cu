@@ -194,18 +194,11 @@ int main(int argc, char** argv){
         // Split K dimension into 1 partitions
         int split_k_slices = 1;
 
-        NCCLChunk* dNCCLChunks;
-        const int numNCCLChunks = 24 * 128 * 512;
-        printf("sizeof cunkinfo %ld\n", sizeof(NCCLChunk) * numNCCLChunks);
-        CUDACHECK(cudaMalloc(&dNCCLChunks, sizeof(NCCLChunk) * numNCCLChunks));
+        std::vector<std::vector<NCCLChunk>> hNCCLChunks;
         
-        ncclCustomCollective2DInfo(dNCCLChunks, N, (M*N)/comm_size, ncclHalf, comm, stream);
+        ncclCustomCollective2DInfo(hNCCLChunks, N, (M*N)/comm_size, ncclHalf, comm, stream);
         CUDACHECK(cudaDeviceSynchronize());
-        printf("204\n");
-        std::vector<NCCLChunk> hNCCLChunks = std::vector<NCCLChunk>(numNCCLChunks);
-        CUDACHECK(cudaMemcpy(&hNCCLChunks[0], dNCCLChunks, sizeof(NCCLChunk) * numNCCLChunks, cudaMemcpyDeviceToHost));
-        CUDACHECK(cudaFree(dNCCLChunks));
-
+        
         typename SCCLGemm::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
                                           tensor_a,  // <- reference to matrix A on device
                                           tensor_b,  // <- reference to matrix B on device

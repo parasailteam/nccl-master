@@ -11,6 +11,8 @@
 #include <cuda_fp16.h>
 #include <sys/types.h>
 
+#include <vector>
+
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define NCCL_MAJOR ${nccl:Major}
 #define NCCL_MINOR ${nccl:Minor}
@@ -318,7 +320,7 @@ ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t c
 ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const size_t ld, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 
-ncclResult_t ncclCustomCollective2DInfo(void* infobuff, const size_t ld, size_t count,
+ncclResult_t ncclCustomCollective2DInfo(std::vector<std::vector<NCCLChunk>>& ncclChunks, const size_t ld, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 /*
  * Group semantics
