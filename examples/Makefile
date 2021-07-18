@@ -35,6 +35,12 @@ matmul-allreduce-release: matmul-allreduce.cu
 matmul-allreduce-run: matmul-allreduce-release
 	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=1 -x NCCL_MAX_NCHANNELS=1 ./matmul-allreduce
 
+matmul-allreduce-2-run-2-channels: matmul-allreduce-release
+	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=2 -x NCCL_MAX_NCHANNELS=2 ./matmul-allreduce
+
+matmul-allreduce-16-run-24-channels: matmul-allreduce-release
+	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=24 -x NCCL_MAX_NCHANNELS=24 ./matmul-allreduce
+
 test-sccl-run: test-sccl
 	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=1 -x NCCL_MAX_NCHANNELS=1 ./test-sccl
 

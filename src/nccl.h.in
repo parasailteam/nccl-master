@@ -14,6 +14,7 @@
 #include <vector>
 
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define NCCL_MAJOR ${nccl:Major}
 #define NCCL_MINOR ${nccl:Minor}
 #define NCCL_PATCH ${nccl:Patch}
@@ -55,7 +56,7 @@ struct NCCLChunk {
   Block2D chunk;
   int iter;
   int step;
-  int bid;
+  uint bid;
 };
 
 /* Opaque handle to communicator */

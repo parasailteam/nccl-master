@@ -136,13 +136,11 @@ int main(int argc, char** argv){
 
       int M = BATCH_SIZE[model] * SEQUENCE_LENGTH;
       int N = HIDDEN_DIMENSIONS_12CHANNELS[model];
-      int K = N/MODEL_PARALLEL_GPUS[model] * ((matMulType == 0) ? 1 : 4);
+      int K = N/comm_size * ((matMulType == 0) ? 1 : 4);
 
       if (rank == 0)
         printf("Model Size %.2f B Params , MatMul: [%d, %d] X [%d, %d]\n", MODEL_PARAMS[model], M, K, K, N);
             
-      if (comm_size != MODEL_PARALLEL_GPUS[model])
-        continue;
       // Inputs
       half* m1;
       CUDACHECK(cudaMalloc(&m1, M*K * sizeof(half)));
