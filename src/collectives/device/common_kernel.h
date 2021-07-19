@@ -433,9 +433,9 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
-        const int chunkElemRow = chunkElemOffset / srcBlock->chunkCols;
-        const int chunkElemCol = chunkElemOffset % srcBlock->chunkCols;
-        ssize_t idx = (srcBlock->chunkStartRow + chunkElemRow) * matrixCols + (srcBlock->chunkStartCol + chunkElemCol);
+        const int chunkElemRow = chunkElemOffset / srcBlock->cols;
+        const int chunkElemCol = chunkElemOffset % srcBlock->cols;
+        ssize_t idx = (srcBlock->startRow + chunkElemRow) * matrixCols + (srcBlock->startCol + chunkElemCol);
         Fetch128(vals[u], (const Pack128*)(s[0]+idx));
       }
     } else {
@@ -462,9 +462,9 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
       for (int u = 0; u < UNROLL; ++u) {
         const size_t chunkElemOffset = (linearStartOffset + elemOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
 
-        const int chunkElemRow = chunkElemOffset / dstBlock->chunkCols;
-        const int chunkElemCol = chunkElemOffset % dstBlock->chunkCols;
-        size_t idx = ((dstBlock->chunkStartRow + chunkElemRow) * matrixCols + (dstBlock->chunkStartCol + chunkElemCol));
+        const int chunkElemRow = chunkElemOffset / dstBlock->cols;
+        const int chunkElemCol = chunkElemOffset % dstBlock->cols;
+        size_t idx = ((dstBlock->startRow + chunkElemRow) * matrixCols + (dstBlock->startCol + chunkElemCol));
         Store128((Pack128*)(d[0]+idx), vals[u]);
       }
     }

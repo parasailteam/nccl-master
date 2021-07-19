@@ -29,10 +29,10 @@ extern "C" {
 
 //Represents a 2D chunk
 struct Block2D {
-  int chunkStartRow; //Remove chunk from each variable name
-  int chunkStartCol;
-  int chunkRows;
-  int chunkCols;
+  int startRow; //Remove chunk from each variable name
+  int startCol;
+  int rows;
+  int cols;
 };
 
 struct NCCLChunk {
