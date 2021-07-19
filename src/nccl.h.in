@@ -33,23 +33,6 @@ struct Block2D {
   int chunkStartCol;
   int chunkRows;
   int chunkCols;
-
-  __device__ __host__ __forceinline__ Block2D(const ssize_t size, const int chunkIdx, const int chunkSize, const int numChunks, 
-                                     const int chunkRows, const int chunkCols, const int rows, const int ld) {
-    chunkStartRow = chunkIdx / numChunks * chunkRows;
-    chunkStartCol = chunkIdx % numChunks * chunkCols;
-    int nelem = MIN(chunkSize, (int)(size - (chunkStartRow * ld + (rows - chunkStartRow) * (ld - (ld - chunkStartCol)))));
-    this->chunkRows = MIN(MIN(nelem/chunkCols, chunkRows), rows - chunkStartRow);
-    this->chunkCols = chunkCols;
-  }
-
-  __device__ __host__ __forceinline__ Block2D() :
-    chunkStartRow(-1), chunkStartCol(-1), chunkRows(-1), chunkCols(-1)
-  {}
-  __device__ __host__ __forceinline__
-  bool isValid() const {return chunkStartCol >= 0 && chunkStartRow >= 0 && chunkRows > 0 && chunkCols > 0;}
-  __device__ __host__ __forceinline__ 
-  int nelem() const {return chunkRows * chunkCols;}
 };
 
 struct NCCLChunk {

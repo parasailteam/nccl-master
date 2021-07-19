@@ -112,6 +112,19 @@ class scclFunction {
 
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction2D {
+  private:
+    __device__ __forceinline__ void initBlock2D(Block2D& block, const ssize_t size, const int chunkIdx, const int chunkSize, const int numChunks, 
+                                      const int chunkRows, const int chunkCols, const int rows, const int ld) {
+      block.chunkStartRow = chunkIdx / numChunks * chunkRows;
+      block.chunkStartCol = chunkIdx % numChunks * chunkCols;
+      int nelem = MIN(chunkSize, (int)(size - (block.chunkStartRow * ld + (rows - block.chunkStartRow) * (ld - (ld - block.chunkStartCol)))));
+      block.chunkRows = MIN(MIN(nelem/chunkCols, chunkRows), rows - block.chunkStartRow);
+      block.chunkCols = chunkCols;
+    }
+
+    __device__ __forceinline__ void nelemBlock2D(Block2D& block) {
+      return block.chunkRows * block.chunkCols;
+    }
   public:
     __device__ void run(struct ncclWorkElem* args) {
       struct ncclDevComm* comm = args->comm;
@@ -190,27 +203,29 @@ class scclFunction2D {
             
             int thisCount = min(scclMaxAllowedCount, count-c);
             
-            const Block2D srcBlock = Block2D(size*nranks, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
-            const Block2D dstBlock = Block2D(size*nranks, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
+            Block2D srcBlock, dstBlock;
+
+            initBlock2D(srcBlock, size*nranks, srcChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
+            initBlock2D(dstBlock, size*nranks, dstChunkIdx, chunkSize, numChunks, chunkRows, chunkCols, rows, ld);
 
             switch (sccltran->type) {
               case SCCL_SEND:
-                prims.send(i, srcPointer, &srcBlock, thisCount);
+                prims.send(i, srcPointer, &srcBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV:
-                prims.recv(i, dstPointer, &dstBlock, thisCount);
+                prims.recv(i, dstPointer, &dstBlock, nelemBlock2D(dstBlock)*thisCount);
                 break;
               case SCCL_RECV_COPY_SEND:
-                prims.recvCopySend(i, dstPointer, &dstBlock, thisCount);
+                prims.recvCopySend(i, dstPointer, &dstBlock, nelemBlock2D(dstBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_SEND:
-                prims.recvReduceSend(i, srcPointer, &srcBlock, thisCount);
+                prims.recvReduceSend(i, srcPointer, &srcBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_COPY_SEND:
-                prims.recvReduceCopySend(i, srcPointer, dstPointer, &srcBlock, &dstBlock, thisCount);
+                prims.recvReduceCopySend(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_COPY: 
-                prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, thisCount);
+                prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_NO_OP:
                 break;
@@ -347,47 +362,47 @@ struct SimpleWrapper2D {
     __device__ __forceinline__ void initIter(int iter, int step) {
     }
   const bool toPrint = false;
-  __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
+  __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
-    prims.send(src, srcBlock, 0, srcBlock->nelem()*count);
+    prims.send(src, srcBlock, 0, nelem);
   }
 
-  __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int count) {
+  __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
-    prims.recv(dst, dstBlock, 0, dstBlock->nelem()*count);
+    prims.recv(dst, dstBlock, 0, nelem);
   }
 
-  __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int count) {
+  __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
       // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
     }
-    prims.recvCopySend(dst, dstBlock, 0, dstBlock->nelem()*count);
+    prims.recvCopySend(dst, dstBlock, 0, nelem);
   }
   
-  __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int count) {
+  __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
       printf("%d [%d, %d] step %d nelem %d, [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols);
     }
-    prims.recvReduceSend(src, srcBlock, 0, srcBlock->nelem()*count);
+    prims.recvReduceSend(src, srcBlock, 0, nelem);
   }
 
-  __device__ __forceinline__ void recvReduceCopy(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
+  __device__ __forceinline__ void recvReduceCopy(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
        printf("%d [%d, %d] step %d nelem %d, src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->nelem(), srcBlock->chunkStartRow, srcBlock->chunkStartCol, srcBlock->chunkRows, srcBlock->chunkCols,
        dstBlock->nelem(), dstBlock->chunkStartRow, dstBlock->chunkStartCol, dstBlock->chunkRows, dstBlock->chunkCols);
     }
-    prims.recvReduceCopy(src, dst, srcBlock, dstBlock, 0, dstBlock->nelem()*count);
+    prims.recvReduceCopy(src, dst, srcBlock, dstBlock, 0, nelem);
   }
   
-  __device__ __forceinline__ void recvReduceCopySend(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int count) {
+  __device__ __forceinline__ void recvReduceCopySend(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
       // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.chunkStartRow, dstBlock.chunkStartCol, dstBlock.chunkRows, dstBlock.chunkCols);
     }
-    prims.recvReduceCopySend(src, dst, srcBlock, dstBlock, 0, dstBlock->nelem()*count);
+    prims.recvReduceCopySend(src, dst, srcBlock, dstBlock, 0, nelem);
   }
 };
 
@@ -423,8 +438,6 @@ struct SimpleWrapper2DInfo {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       rank(args->comm->rank), numNCCLChunks(0) {
-        prims.matrixRows = rows;
-        prims.matrixCols = ld;
         //Align chunk size to the number of columns.
         chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
         chunkSize = ALIGN_DOWN(chunkSize, ld);
@@ -454,8 +467,7 @@ struct SimpleWrapper2DInfo {
       currStep = step;
     }
 
-  __device__ __forceinline__ void 
-  pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo) {
+  __device__ __forceinline__ void pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo) {
     if (threadIdx.x == 0) {
       chunkInfos[numNCCLChunks++] = chunkInfo;
       //Always set next NCCLChunk as invalid because this is an "invalid block" terminated array
@@ -463,7 +475,7 @@ struct SimpleWrapper2DInfo {
     }
   }
 
-    //TODO: No need to call prims.<functions> 
+  //TODO: No need to call prims.<functions> 
   const bool toPrint = false;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int count) {
     if (toPrint && rank == 0 && threadIdx.x == 0) {
