@@ -12,8 +12,11 @@
 #define SCCL_MAX_ITER 65536
 
 // flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
-#define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
-   SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
+#define COMPUTE_FLAG(__WORKINDEX__) \
+   (uint64_t)__WORKINDEX__
+
+#define COMPUTE_FLAG_INDEX(__BID__,__GRIDOFFSET_ITER__,__STEP__) \
+   SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*__BID__ + (__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + __STEP__)
 
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
@@ -60,8 +63,8 @@ class scclFunction {
           int8_t dependentStep = sccltran->dependentStep;
           if (sccltran->dependentBid >= 0){
               if (tid == sync_tid){
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              while ((scclFlags + dependentBid)->flag < goalFlag){};
+              //TODO: uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+              //while ((scclFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
           }
@@ -102,15 +105,15 @@ class scclFunction {
           }
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
-            scclFlags[bid].flag = curFlag;
+            //TODO: uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
+            //scclFlags[bid].flag = curFlag;
           }
         }
       }
     }
 };
 
-template<typename T, typename PRIMS_WRAPPER>
+template<typename T, typename PRIMS_WRAPPER, bool DO_SYNC>
 class scclFunction2D {
   private:
     __device__ __forceinline__ void initBlock2D(Block2D& block, const ssize_t size, const int chunkIdx, const int chunkSize, const int numChunks, 
@@ -160,7 +163,6 @@ class scclFunction2D {
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
-
 //  2D Chunk equiv of 1D Chunk of 64K with 1024 Matrix Cols = 64 x 1024
 //  2D Chunk of 64K can be = 64 x 1024, 128 x 512, 256 x 256
 
@@ -176,7 +178,7 @@ class scclFunction2D {
       assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
       int iter;
 
-      for (iter = 0, gridChunkIdx = 0; gridChunkIdx < numScclChunks2D; gridChunkIdx += 1, iter++) {
+      for (iter = 0, gridChunkIdx = 0; gridChunkIdx < numScclChunks2D; gridChunkIdx++) {
         T* srcPointer, * dstPointer;
 
         for (int i = 0; i < scclTB->nsteps; i++){
@@ -185,10 +187,13 @@ class scclFunction2D {
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
           int8_t dependentStep = sccltran->dependentStep;
-          if (false && dependentBid >= 0){//TODO: Remove it after info
+          int flagsPerBlock = scclAlgo->flagsPerBlock;
+
+          if (DO_SYNC && dependentBid >= 0){//TODO: Remove it after info
               if (tid == sync_tid){
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              while ((scclFlags + dependentBid)->flag < goalFlag){};
+                uint64_t goalFlag = COMPUTE_FLAG(workIndex);
+                printf("rank %d flagsPerBlock %d iter %d goalFlag %ld\n", comm->rank, flagsPerBlock, iter, goalFlag);
+                while (scclFlags[dependentBid * flagsPerBlock + iter].flag < goalFlag){};
               }
               __syncthreads();
           }
@@ -233,11 +238,12 @@ class scclFunction2D {
                 return;
             }
           }
-          if (tid == sync_tid && sccltran->has_dependence){
+          if (DO_SYNC && tid == sync_tid && sccltran->has_dependence){
             __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
-            scclFlags[bid].flag = curFlag;
+            uint64_t curFlag = COMPUTE_FLAG(workIndex);
+            scclFlags[COMPUTE_FLAG_INDEX(dependentBid, iter, dependentStep)].flag = curFlag;
           }
+          iter++;
         }
       }
     }
@@ -268,11 +274,20 @@ protected:
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti2D<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, SRC, DST, Block2D>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+              // ReduceOrCopyMulti2D<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, SRC, DST, Block2D>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
             }
           } else {
-            ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
-            offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+            if (false) {
+              const int numElemsPerLoopPerWarp = UNROLL * (sizeof(Pack128)/sizeof(T)) * warpSize;
+              const int startRow = offset / srcBlock->cols;
+              const int rows = realSize / srcBlock->cols;
+              for (int row = startRow + this->tid/WARP_SIZE; row < startRow + rows; row += this->nworkers/WARP_SIZE) {
+                //TODO: Assing one row to one warp and call ReduceOrCopyMulti.
+              }
+            } else {
+              ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+                                                                                                                          offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+            }
           }
         }
       }
@@ -469,9 +484,12 @@ struct SimpleWrapper2DInfo {
 
   __device__ __forceinline__ void pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo) {
     if (threadIdx.x == 0) {
+      if (threadIdx.x == 0 && blockIdx.x == 0) {
+         printf("%d: chunkInfos %p [%d, %d] iter %d  src: [%d, %d]; [%d, %d] numNCCLChunks %d\n", __LINE__, chunkInfos, rank, blockIdx.x, chunkInfo.iter, chunkInfo.chunk.startRow, chunkInfo.chunk.startCol, chunkInfo.chunk.rows, chunkInfo.chunk.cols, numNCCLChunks);
+      }
       chunkInfos[numNCCLChunks++] = chunkInfo;
       //Always set next NCCLChunk as invalid because this is an "invalid block" terminated array
-      chunkInfos[numNCCLChunks + 1] = NCCLChunk{Block2D(), -1, -1}; 
+      chunkInfos[numNCCLChunks + 1] = NCCLChunk{Block2D{-1,-1,-1,-1}, -1, -1}; 
     }
   }
 
@@ -480,7 +498,7 @@ struct SimpleWrapper2DInfo {
   }
 
   __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int count) {
-    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
+    // pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
 
   __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int count) {

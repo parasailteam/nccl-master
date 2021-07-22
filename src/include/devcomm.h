@@ -168,11 +168,6 @@ struct scclChannelInfo {
   int nBlocksForChannel;
 };
 
-struct scclFlag {
-  uint64_t flag;
-  uint64_t align[3]; // To avoid false sharing
-};
-
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
   // max(#chunks in input, #chunks in output)
@@ -202,6 +197,8 @@ struct scclAlgorithm {
   int flagsNeedReset;
   //Size of the leading dimension of the chunk
   int chunkld;
+  //Number of flags for each block
+  int flagsPerBlock;
 };
 
 #define NCCL_MAX_TREE_ARITY 3

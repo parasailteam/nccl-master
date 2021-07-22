@@ -8,7 +8,7 @@
   #include "cutlass-matmul.h"
 #endif
 #include <cuda_profiler_api.h>
-
+#include <unistd.h>
 #include <map> 
 
 bool mpiRef(const float* m1, const float* m2, float* m1m2, int M, int N, int K, int comm_size, int rank = -1)
@@ -61,6 +61,14 @@ int main(int argc, char** argv){
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
+
+  if (rank == -1) {
+    printf("PID %d on ready for attach\n", getpid());
+    fflush(stdout);
+
+    printf("waiting for input\n");
+    int c= getchar();
+  }
 
   //initializing NCCL
   ncclUniqueId id;
@@ -193,16 +201,18 @@ int main(int argc, char** argv){
         int split_k_slices = 1;
 
         std::vector<std::vector<NCCLChunk>> hNCCLChunks;
-        
-        ncclCustomCollective2DInfo(hNCCLChunks, N, (M*N)/comm_size, ncclHalf, comm, stream);
+        scclFlag* deviceScclFlags;
+
+        ncclCustomCollective2DInfo(hNCCLChunks, &deviceScclFlags, N, (M*N)/comm_size, ncclHalf, comm, stream);
         CUDACHECK(cudaDeviceSynchronize());
-        
+        workIndex += 1; //+1 for info
+
         typename SCCLGemm::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
                                           tensor_a,  // <- reference to matrix A on device
                                           tensor_b,  // <- reference to matrix B on device
                                           tensor_c,  // <- reference to matrix C on device
                                           tensor_d,  // <- reference to matrix D on device
-                                          scclAlgo,
+                                          deviceScclFlags,
                                           hNCCLChunks,
                                           {alpha, beta},          // <- tuple of alpha and beta
                                           split_k_slices};        // <- k-dimension split factor
@@ -241,8 +251,8 @@ int main(int argc, char** argv){
 
           // CUDACHECK(cudaMemset(tileStatusMap, 0, numTiles * sizeof(int)));
  
-          if (rank == 0 && iter %20 == 0)
-            printf("iter %d\n", iter);
+          // if (rank == 0 && iter %20 == 0)
+          if (rank == 0) printf("iter %d\n", iter);
           cudaEvent_t startpipe, stoppipe;
           cudaEvent_t cutlassStartPipe, cutlassStopPipe;
           float elapsedTimepipe, cutlassElapsedTimepipe;
@@ -255,9 +265,11 @@ int main(int argc, char** argv){
           CUDACHECK(cudaEventRecord(startpipe, stream));
           CUDACHECK(cudaEventRecord(cutlassStartPipe, cutlassStream));
 
-          double t1 = getCurrentTime();     
-                    
-          status = gemm_op(cutlassStream);
+          double t1 = getCurrentTime();   
+          // if (iter == 0)  
+            status = gemm_op(cutlassStream);
+          // else if (rank == 0)
+          //   status = gemm_op(cutlassStream);
           CUTLASS_CHECK(status);
 
           CUDACHECK(cudaDeviceSynchronize());

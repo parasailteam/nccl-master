@@ -292,7 +292,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
-  printf("comm->scclAlgo.flags %p\n", comm->scclAlgo.flags);
+
   return ncclSuccess;
 }
 
