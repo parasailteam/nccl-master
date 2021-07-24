@@ -192,7 +192,9 @@ class scclFunction2D {
           if (DO_SYNC && dependentBid >= 0){
               if (tid == sync_tid){
                 uint64_t goalFlag = COMPUTE_FLAG(workIndex);
+                printf("index %d gloalFlag %ld\n", dependentBid * flagsPerBlock + iter, goalFlag);
                 while (scclFlags[dependentBid * flagsPerBlock + iter].flag < goalFlag){};
+                printf("197:");
               }
               __syncthreads();
           }
@@ -507,7 +509,7 @@ struct SimpleWrapper2DInfo {
   }
 
   __device__ __forceinline__ void recvCopySend(int step, T * dst, const Block2D* dstBlock, int count) {
-    pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
+    // pushChunkInfo((NCCLChunk*)dst + outputOffset, NCCLChunk{*dstBlock, iter, step, blockIdx.x});
   }
   
   __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int count) {

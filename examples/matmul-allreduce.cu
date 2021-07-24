@@ -90,7 +90,7 @@ int main(int argc, char** argv){
   } else if (collType == ReduceScatter) {
     sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   } else if (collType == AllReduce) {
-    sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
+    sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks_overlap.xml", comm_size, nChannels);
   }
   printf("filename '%s'\n", filename);
   scclAlgorithm_t scclAlgo;
@@ -240,6 +240,8 @@ int main(int argc, char** argv){
           // CUDACHECK(cudaFuncSetAttribute(dummyKernel<80>,
           //                           cudaFuncAttributeMaxDynamicSharedMemorySize,
           //                           96*1024));
+        MPI_Barrier(MPI_COMM_WORLD);
+
         float minSampleTime = 10000000.0f;
         float cutlassTime = 0;
         float sampleTime;
@@ -258,7 +260,6 @@ int main(int argc, char** argv){
           cudaEvent_t startpipe, stoppipe;
           cudaEvent_t cutlassStartPipe, cutlassStopPipe;
           float elapsedTimepipe, cutlassElapsedTimepipe;
-          // MPI_Barrier(MPI_COMM_WORLD);
 
           CUDACHECK(cudaEventCreate(&startpipe));
           CUDACHECK(cudaEventCreate(&stoppipe));
@@ -268,12 +269,12 @@ int main(int argc, char** argv){
           CUDACHECK(cudaEventRecord(cutlassStartPipe, cutlassStream));
 
           double t1 = getCurrentTime();   
-
+          status = gemm_op(cutlassStream);
           CUDACHECK(cudaDeviceSynchronize());
 
           NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, 
             (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
-          status = gemm_op(cutlassStream);
+          
 
           CUTLASS_CHECK(status);
 
