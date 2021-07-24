@@ -189,10 +189,9 @@ class scclFunction2D {
           int8_t dependentStep = sccltran->dependentStep;
           int flagsPerBlock = scclAlgo->flagsPerBlock;
 
-          if (DO_SYNC && dependentBid >= 0){//TODO: Remove it after info
+          if (DO_SYNC && dependentBid >= 0){
               if (tid == sync_tid){
                 uint64_t goalFlag = COMPUTE_FLAG(workIndex);
-                printf("rank %d flagsPerBlock %d iter %d goalFlag %ld\n", comm->rank, flagsPerBlock, iter, goalFlag);
                 while (scclFlags[dependentBid * flagsPerBlock + iter].flag < goalFlag){};
               }
               __syncthreads();
@@ -215,6 +214,8 @@ class scclFunction2D {
 
             switch (sccltran->type) {
               case SCCL_SEND:
+              if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d , srcPointer[13370240] %f\n", bid, comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter, 
+                !DO_SYNC ? 0 : (float)((half*)srcPointer)[13370240]);
                 prims.send(i, srcPointer, &srcBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV:
@@ -224,12 +225,16 @@ class scclFunction2D {
                 prims.recvCopySend(i, dstPointer, &dstBlock, nelemBlock2D(dstBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_SEND:
+              if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n", bid, comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
                 prims.recvReduceSend(i, srcPointer, &srcBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_COPY_SEND:
+              if (threadIdx.x == 0)printf("rrcs: %d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d srcPointer[13370240] %f\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter, 
+                !DO_SYNC ? 0 : (float)((half*)srcPointer)[13370240]);
                 prims.recvReduceCopySend(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_RECV_REDUCE_COPY: 
+              if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
                 prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
               case SCCL_NO_OP:
@@ -484,8 +489,8 @@ struct SimpleWrapper2DInfo {
 
   __device__ __forceinline__ void pushChunkInfo(NCCLChunk* chunkInfos, const NCCLChunk chunkInfo) {
     if (threadIdx.x == 0) {
-      if (threadIdx.x == 0 && blockIdx.x == 0) {
-         printf("%d: chunkInfos %p [%d, %d] iter %d  src: [%d, %d]; [%d, %d] numNCCLChunks %d\n", __LINE__, chunkInfos, rank, blockIdx.x, chunkInfo.iter, chunkInfo.chunk.startRow, chunkInfo.chunk.startCol, chunkInfo.chunk.rows, chunkInfo.chunk.cols, numNCCLChunks);
+      if (threadIdx.x == 0) {
+        printf("%d: chunkInfos %p [%d, %d] iter %d  src: [%d, %d]; [%d, %d] numNCCLChunks %d\n", __LINE__, chunkInfos, rank, blockIdx.x, chunkInfo.iter, chunkInfo.chunk.startRow, chunkInfo.chunk.startCol, chunkInfo.chunk.rows, chunkInfo.chunk.cols, numNCCLChunks);
       }
       chunkInfos[numNCCLChunks++] = chunkInfo;
       //Always set next NCCLChunk as invalid because this is an "invalid block" terminated array

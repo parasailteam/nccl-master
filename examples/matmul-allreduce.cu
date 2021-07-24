@@ -139,7 +139,7 @@ int main(int argc, char** argv){
   
   int workIndex = 0;
 
-  for (int model = 0; model < sizeof(HIDDEN_DIMENSIONS)/sizeof(HIDDEN_DIMENSIONS[0]); model++) {
+  for (int model = 0; model < 1;/*sizeof(HIDDEN_DIMENSIONS)/sizeof(HIDDEN_DIMENSIONS[0]);*/ model++) {
     for (int matMulType = 1; matMulType < 2; matMulType++) {
 
       int M = BATCH_SIZE[model] * SEQUENCE_LENGTH;
@@ -202,8 +202,9 @@ int main(int argc, char** argv){
 
         std::vector<std::vector<NCCLChunk>> hNCCLChunks;
         scclFlag* deviceScclFlags;
+        int flagsPerBlock;
 
-        ncclCustomCollective2DInfo(hNCCLChunks, &deviceScclFlags, N, (M*N)/comm_size, ncclHalf, comm, stream);
+        ncclCustomCollective2DInfo(hNCCLChunks, &deviceScclFlags, &flagsPerBlock, N, (M*N)/comm_size, ncclHalf, comm, stream);
         CUDACHECK(cudaDeviceSynchronize());
         workIndex += 1; //+1 for info
 
@@ -213,6 +214,7 @@ int main(int argc, char** argv){
                                           tensor_c,  // <- reference to matrix C on device
                                           tensor_d,  // <- reference to matrix D on device
                                           deviceScclFlags,
+                                          flagsPerBlock,
                                           hNCCLChunks,
                                           {alpha, beta},          // <- tuple of alpha and beta
                                           split_k_slices};        // <- k-dimension split factor
@@ -246,7 +248,7 @@ int main(int argc, char** argv){
         int startParts = 24;
         int lastParts = gemmParts - startParts;
         float firstCutlassTime = 0, firstCutlassT2=0, firstCutlassT1 = 0;
-        for(int iter = 0; iter < 110; iter++) {
+        for(int iter = 0; iter < 2; iter++) {
           //CUDACHECK(cudaMemset(tileIdx, 0, sizeof(int)));
 
           // CUDACHECK(cudaMemset(tileStatusMap, 0, numTiles * sizeof(int)));
@@ -266,16 +268,15 @@ int main(int argc, char** argv){
           CUDACHECK(cudaEventRecord(cutlassStartPipe, cutlassStream));
 
           double t1 = getCurrentTime();   
-          // if (iter == 0)  
-            status = gemm_op(cutlassStream);
-          // else if (rank == 0)
-          //   status = gemm_op(cutlassStream);
-          CUTLASS_CHECK(status);
 
           CUDACHECK(cudaDeviceSynchronize());
+
           NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, 
-                  (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
-          CUDACHECK(cudaDeviceSynchronize());
+            (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
+          status = gemm_op(cutlassStream);
+
+          CUTLASS_CHECK(status);
+
           // NCCLCHECK(ncclAllReduceMatrix(m1m2, M*N, M, N, N, ncclHalf, ncclSum, comm, stream));
 
           // Wait for kernels to finish

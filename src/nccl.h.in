@@ -310,7 +310,7 @@ ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t c
 ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const size_t ld, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 
-ncclResult_t ncclCustomCollective2DInfo(std::vector<std::vector<NCCLChunk>>& ncclChunks, scclFlag** deviceScclFlags, const size_t ld, size_t count,
+ncclResult_t ncclCustomCollective2DInfo(std::vector<std::vector<NCCLChunk>>& ncclChunks, scclFlag** deviceScclFlags, int* flagsPerBlock, const size_t ld, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 /*
  * Group semantics

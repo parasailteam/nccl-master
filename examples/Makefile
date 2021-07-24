@@ -28,7 +28,7 @@ test-sccl-cutlass-16-run-24-channels: test-sccl-cutlass
 
 
 matmul-allreduce-release: matmul-allreduce.cu
-	nvcc matmul-allreduce.cu -arch=sm_70 -O3 -Xptxas -v,-O3 -DNDEBUG -std=c++11 -Xcompiler -fopenmp,-O3 -lcudadevrt -lcudart -I/usr/include/x86_64-linux-gnu/mpi -I.. \
+	nvcc matmul-allreduce.cu -arch=sm_70 -O3 -Xptxas -v,-O3 -std=c++11 -Xcompiler -fopenmp,-O3 -lcudadevrt -lcudart -I/usr/include/x86_64-linux-gnu/mpi -I.. \
 	-I/usr/local/cuda/include/ -I ../build/include/ -I ../../cutlass/include -I ../../cutlass/tools/util/include -I ../../cutlass/examples/common -L../build/lib/ -L/usr/local/cuda/lib64/ -lnccl -lcublas -lcurand -c && \
 	mpicxx matmul-allreduce.o -I/usr/local/cuda/include/ -I../build/include/ -L../build/lib/ -L/usr/local/cuda/lib64/ -lcudart -lnccl -lcublas -Wall -lcurand -lcudadevrt -std=c++11 -fopenmp -o matmul-allreduce
 
@@ -42,6 +42,15 @@ matmul-allreduce-run: matmul-allreduce-release
 
 matmul-allreduce-2-run-2-channels: matmul-allreduce-release
 	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=2 -x NCCL_MAX_NCHANNELS=2 ./matmul-allreduce
+
+matmul-allreduce-2-run-6-channels: matmul-allreduce-release
+	mpirun -np 2 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=6 -x NCCL_MAX_NCHANNELS=6 ./matmul-allreduce
+
+matmul-allreduce-4-run-2-channels: matmul-allreduce-release
+	mpirun -np 4 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=2 -x NCCL_MAX_NCHANNELS=2 ./matmul-allreduce
+
+matmul-allreduce-4-run-4-channels: matmul-allreduce-release
+	mpirun -np 4 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=4 -x NCCL_MAX_NCHANNELS=4 ./matmul-allreduce
 
 matmul-allreduce-16-run-24-channels: matmul-allreduce-release
 	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=24 -x NCCL_MAX_NCHANNELS=24 ./matmul-allreduce
