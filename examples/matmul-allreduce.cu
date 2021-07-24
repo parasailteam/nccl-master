@@ -139,7 +139,7 @@ int main(int argc, char** argv){
   
   int workIndex = 0;
 
-  for (int model = 0; model < 1;/*sizeof(HIDDEN_DIMENSIONS)/sizeof(HIDDEN_DIMENSIONS[0]);*/ model++) {
+  for (int model = 0; model < sizeof(HIDDEN_DIMENSIONS)/sizeof(HIDDEN_DIMENSIONS[0]); model++) {
     for (int matMulType = 1; matMulType < 2; matMulType++) {
 
       int M = BATCH_SIZE[model] * SEQUENCE_LENGTH;
@@ -250,12 +250,12 @@ int main(int argc, char** argv){
         int startParts = 24;
         int lastParts = gemmParts - startParts;
         float firstCutlassTime = 0, firstCutlassT2=0, firstCutlassT1 = 0;
-        for(int iter = 0; iter < 2; iter++) {
+        for(int iter = 0; iter < 110; iter++) {
           //CUDACHECK(cudaMemset(tileIdx, 0, sizeof(int)));
 
           // CUDACHECK(cudaMemset(tileStatusMap, 0, numTiles * sizeof(int)));
  
-          // if (rank == 0 && iter %20 == 0)
+          if (rank == 0 && iter %20 == 0)
           if (rank == 0) printf("iter %d\n", iter);
           cudaEvent_t startpipe, stoppipe;
           cudaEvent_t cutlassStartPipe, cutlassStopPipe;
@@ -269,12 +269,10 @@ int main(int argc, char** argv){
           CUDACHECK(cudaEventRecord(cutlassStartPipe, cutlassStream));
 
           double t1 = getCurrentTime();   
-          status = gemm_op(cutlassStream);
-          CUDACHECK(cudaDeviceSynchronize());
 
           NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, 
             (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
-          
+          status = gemm_op(cutlassStream);
 
           CUTLASS_CHECK(status);
 
