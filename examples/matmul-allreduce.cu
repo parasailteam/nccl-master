@@ -45,6 +45,74 @@ bool mpiRef(const float* m1, const float* m2, float* m1m2, int M, int N, int K, 
   return true;
 }
 
+void pipe_rowmajorABC(cublasHandle_t handle, const half *alpha, const half *beta, const half* m1, const half* m2, half* m1m2, ncclComm_t comm, cudaStream_t stream, int M, int N, int K, float& allReduceTime, float& cublasTime) {
+  cudaEvent_t startpipe, stoppipe;
+    float elapsedTime = 0;
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    CUDACHECK(cudaEventCreate(&startpipe));
+    CUDACHECK(cudaEventCreate(&stoppipe));
+    CUDACHECK(cudaEventRecord(startpipe, stream));
+  CUBLASCHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, 
+    N, M, K, 
+    alpha,
+    m2, CUDA_R_16F, N,
+    m1, CUDA_R_16F, K,
+    beta, 
+    m1m2, CUDA_R_16F, N,
+    CUDA_R_16F, CUBLAS_GEMM_DFALT_TENSOR_OP));
+    CUDACHECK(cudaEventRecord(stoppipe, stream));
+
+    CUDACHECK(cudaStreamSynchronize(stream));
+    CUDACHECK(cudaEventSynchronize(stoppipe));
+    CUDACHECK(cudaEventElapsedTime(&elapsedTime, startpipe,stoppipe));
+
+    cublasTime += elapsedTime;
+
+  elapsedTime = 0;
+  double t1 = getCurrentTime();
+
+  NCCLCHECK(ncclAllReduce(m1m2, m1m2, M*N, ncclHalf, ncclSum, comm, stream));
+  CUDACHECK(cudaStreamSynchronize(stream));
+  double t2 = getCurrentTime();
+  allReduceTime += (t2-t1)*1000.0f;
+}
+
+
+void pipe_scclbaseline_rowmajorABC(cublasHandle_t handle, const half *alpha, const half *beta, const half* m1, const half* m2, half* m1m2, ncclComm_t comm, 
+                                  cudaStream_t stream, int M, int N, int K, int comm_size, float& allReduceTime, float& cublasTime) {
+  cudaEvent_t startpipe, stoppipe;
+    float elapsedTime = 0;
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    CUDACHECK(cudaEventCreate(&startpipe));
+    CUDACHECK(cudaEventCreate(&stoppipe));
+    CUDACHECK(cudaEventRecord(startpipe, stream));
+  CUBLASCHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, 
+    N, M, K, 
+    alpha,
+    m2, CUDA_R_16F, N,
+    m1, CUDA_R_16F, K,
+    beta, 
+    m1m2, CUDA_R_16F, N,
+    CUDA_R_16F, CUBLAS_GEMM_DFALT_TENSOR_OP));
+    CUDACHECK(cudaEventRecord(stoppipe, stream));
+
+    CUDACHECK(cudaStreamSynchronize(stream));
+    CUDACHECK(cudaEventSynchronize(stoppipe));
+    CUDACHECK(cudaEventElapsedTime(&elapsedTime, startpipe,stoppipe));
+
+    cublasTime += elapsedTime;
+
+  elapsedTime = 0;
+  double t1 = getCurrentTime();
+
+  NCCLCHECK(ncclCustomCollective2D((const void*)m1m2, (void*)m1m2, N, (M*N)/comm_size, ncclHalf, comm, stream));
+  CUDACHECK(cudaStreamSynchronize(stream));
+  double t2 = getCurrentTime();
+  allReduceTime += (t2-t1)*1000.0f;
+}
+
 #define MAX_CHANNELS 80
 
 int main(int argc, char** argv){
@@ -61,7 +129,17 @@ int main(int argc, char** argv){
   const int epochs = 1000;
   
   //CUDACHECK(cudaMemset(weights, 0, size * sizeof(T)));
+  
+  bool isSCCLBaseline = false;
+  if (argc >= 2) {
+    if (strcmp(argv[1], "sccl-baseline") == 0) {
+      isSCCLBaseline = true;
+    }
+  }
 
+  if (rank == 0) {
+    printf("isSCCLBaseline %d\n", isSCCLBaseline);
+  }
   if (rank == -1) {
     printf("PID %d on ready for attach\n", getpid());
     fflush(stdout);
@@ -90,7 +168,11 @@ int main(int argc, char** argv){
   } else if (collType == ReduceScatter) {
     sprintf(filename, "reduce_scatter_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   } else if (collType == AllReduce) {
-    sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks_overlap.xml", comm_size, nChannels);
+    if (isSCCLBaseline) {
+      sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
+    } else {
+      sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks_overlap.xml", comm_size, nChannels);
+    }
   }
   printf("filename '%s'\n", filename);
   scclAlgorithm_t scclAlgo;
@@ -104,6 +186,20 @@ int main(int argc, char** argv){
 
   cudaStream_t cutlassStream;
   cudaStreamCreateWithPriority(&cutlassStream, cudaStreamDefault, leastStreamPriority);
+
+  cublasHandle_t handleWithCutlassStream;
+  CUBLASCHECK(cublasCreate(&handleWithCutlassStream));
+  CUBLASCHECK(cublasSetStream(handleWithCutlassStream, cutlassStream));
+  CUBLASCHECK(cublasSetMathMode(handleWithCutlassStream, CUBLAS_TENSOR_OP_MATH));
+  
+  half* dAlpha, *dBeta;
+  half alpha = __float2half(1.0);
+  CUDACHECK(cudaMalloc(&dAlpha, sizeof(half)));
+  CUDACHECK(cudaMemcpy(dAlpha, &alpha, sizeof(half), cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMalloc(&dBeta, sizeof(half)));
+  half beta = __float2half(0);
+  CUDACHECK(cudaMemcpy(dBeta, &beta, sizeof(half), cudaMemcpyHostToDevice));
+  CUBLASCHECK(cublasSetPointerMode(handleWithCutlassStream, CUBLAS_POINTER_MODE_DEVICE));
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -175,14 +271,108 @@ int main(int argc, char** argv){
       float matmulTime = 0;
 
       memset_value(m1m2, __float2half(0.0f), M*N);
+      #define CUBLAS_BASELINE
+      #ifdef CUBLAS_BASELINE
+      for(int iter = 0; iter < 110; iter++) {
+        if (rank == 0 and iter % 20 == 0)
+          printf("iter %d\n", iter);
+        cudaEvent_t startpipe, stoppipe;
+        float elapsedTimepipe;
+        float __allReduceTime = 0.0f, __cublasTime = 0.0f;
+        // MPI_Barrier(MPI_COMM_WORLD);
 
+        double t1 = getCurrentTime();
+        // if (rank == 0)
+        // printf("executiing\n");
+        pipe_rowmajorABC(handleWithCutlassStream, dAlpha, dBeta, m1, m2, m1m2, comm, cutlassStream, M, N, K, __allReduceTime, __cublasTime); 
+        workIndex += 1;
+        double t2 = getCurrentTime();
+        // if (rank == 0)
+        // printf("executiing done\n");
+        if (iter >= 10) {
+          totalTime += (t2-t1)*1000.0f;
+          allReduceTime += __allReduceTime;
+          cublasTime += __cublasTime;
+        }
+        // MPI_Barrier(MPI_COMM_WORLD);
+        if (iter == 0) 
+        { 
+          float *hm1 = new float[M*K];
+          float *hm2 = new float[N*K];
+          float *hm1m2 = new float[M*N];
+          
+          cudaMemcpyHalfDevice2FloatHost(hm1, m1, M*K);
+          cudaMemcpyHalfDevice2FloatHost(hm2, m2, N*K);
+          cudaMemcpyHalfDevice2FloatHost(hm1m2, m1m2, M*N);
+          if (rank == 0)
+            printf("checking results at iter %d \n", iter);
+          if (!mpiRef(hm1, hm2, hm1m2, M, N, K, comm_size))
+            assert(false);
+        }
+      }
+
+      MPI_Barrier(MPI_COMM_WORLD);
+      if (rank == 0)
+      printf("AllReduce+cuBLAS: TotalTime %f ms, AllReduceTime %f ms, cuBLAS Time %f ms\n", totalTime, allReduceTime, cublasTime);
+      
+      #endif
       totalTime = 0.0;
       allReduceTime = 0;
       matmulTime = 0;
+      cublasTime = 0;
       
       MPI_Barrier(MPI_COMM_WORLD);
 
-      {
+      if (isSCCLBaseline) {
+        memset_value(m1m2, __float2half(0.0f), M*N);
+        #define CUBLAS_BASELINE
+        #ifdef CUBLAS_BASELINE
+        for(int iter = 0; iter < 110; iter++) {
+          if (rank == 0 and iter % 20 == 0)
+            printf("iter %d\n", iter);
+          cudaEvent_t startpipe, stoppipe;
+          float elapsedTimepipe;
+          float __allReduceTime = 0.0f, __cublasTime = 0.0f;
+          // MPI_Barrier(MPI_COMM_WORLD);
+
+          double t1 = getCurrentTime();
+          // if (rank == 0)
+          // printf("executiing\n");
+          pipe_scclbaseline_rowmajorABC(handleWithCutlassStream, dAlpha, dBeta, m1, m2, m1m2, comm, cutlassStream, M, N, K, comm_size, __allReduceTime, __cublasTime); 
+          workIndex += 1;
+          double t2 = getCurrentTime();
+          // if (rank == 0)
+          // printf("executiing done\n");
+          if (iter >= 10) {
+            totalTime += (t2-t1)*1000.0f;
+            allReduceTime += __allReduceTime;
+            cublasTime += __cublasTime;
+          }
+          // MPI_Barrier(MPI_COMM_WORLD);
+          if (iter == 0) 
+          { 
+            float *hm1 = new float[M*K];
+            float *hm2 = new float[N*K];
+            float *hm1m2 = new float[M*N];
+            
+            cudaMemcpyHalfDevice2FloatHost(hm1, m1, M*K);
+            cudaMemcpyHalfDevice2FloatHost(hm2, m2, N*K);
+            cudaMemcpyHalfDevice2FloatHost(hm1m2, m1m2, M*N);
+            if (rank == 0)
+              printf("checking results at iter %d \n", iter);
+            if (!mpiRef(hm1, hm2, hm1m2, M, N, K, comm_size))
+              assert(false);
+          }
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (rank == 0)
+        printf("ScclAllReduce+cuBLAS: TotalTime %f ms, ScclAllReduceTime %f ms, cuBLAS Time %f ms\n", totalTime, allReduceTime, cublasTime);
+        
+        #endif
+      } else {
+
+        memset_value(m1m2, __float2half(0.0f), M*N);
          int length_m = M;
         int length_n = N;
         int length_k = K;

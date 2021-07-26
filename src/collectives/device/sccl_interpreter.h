@@ -174,7 +174,7 @@ class scclFunction2D {
       int gridChunkIdx = 0;
       const int numTotalChunks = (rows/chunkRows * ld/chunkld);
       const int numScclChunks2D = numTotalChunks/scclAlgo->nchunksPerLoop;
-      // if (threadIdx.x == 0) printf("numScclChunks2D %d numTotalChunks %d chunkld %d chunkRows %d\n", numScclChunks2D, numTotalChunks, sizePerScclChunk, chunkld, chunkRows);
+    
       assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
       int iter;
 
@@ -365,8 +365,15 @@ struct SimpleWrapper2D {
         prims.matrixRows = rows;
         prims.matrixCols = ld;
         //Align chunk size to the number of columns.
-        chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
-        chunkSize = ALIGN_DOWN(chunkSize, ld);
+        const int maxChunkSize = stepSize * SCCL_CHUNKSTEPS;
+        chunkSize = min(maxChunkSize, DIVUP((ld*rows),nchunksPerLoop));
+        if (ROUNDUP(chunkSize, ld) < maxChunkSize) {
+          //Increasing chunkSize if possible
+          chunkSize = ALIGN_SIZE(chunkSize, ld);
+        } else {
+          //Otherwise decrease to align with columns
+          chunkSize = ALIGN_DOWN(chunkSize, ld);
+        }
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rowsPerScclChunk);
         //Make chunkRows a perfect divisor of matrixRows;
