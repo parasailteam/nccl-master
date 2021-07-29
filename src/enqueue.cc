@@ -135,7 +135,6 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       e->comm = comm->devComm;
       e->funcIndex = FUNC_INDEX_P2P;
       e->p2p.nThreads = 0;
-      printf("138\n");
     }
     int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
     int nActives = channel->workFifo[channelTailIndex].elems[0].nActives;

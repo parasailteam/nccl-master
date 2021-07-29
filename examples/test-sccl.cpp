@@ -314,7 +314,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
       memset_identity(minibatch_gradients, size);
     }
     
-      int warmup = 1;
+      int warmup = 10;
       for (int iter = 0; iter < warmup; iter++) {
       #ifdef ALLREDUCE
         NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
@@ -352,7 +352,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
                   (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
-          if (iter==0) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
+          if (iter==0 && datatype != ncclHalf) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
         }
       #endif
       }
@@ -431,9 +431,9 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 1;
+  int totalIters = 100;
   
-    float elapsedTime = run<float>(rank, ncclFloat, totalIters);
+    float elapsedTime = run<float>(rank, ncclHalf, totalIters);
 
   MPI_Finalize();
   return 0;

@@ -199,8 +199,10 @@ class scclFunction2D {
               __syncthreads();
           }
 
-          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          // srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          // dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          srcPointer = thisInput;
+          dstPointer = thisOutput;
           int count = sccltran->count;
 
           for (int c = 0; c < count; c += scclMaxAllowedCount) {     
@@ -235,21 +237,21 @@ class scclFunction2D {
               //   !DO_SYNC ? 0 : (float)((half*)srcPointer)[13370240]);
                 prims.recvReduceCopySend(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
-              case SCCL_RECV_REDUCE_COPY: 
-              // if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
-                prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
-                break;
+              // case SCCL_RECV_REDUCE_COPY: 
+              // // if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
+              //   prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
+              //   break;
               case SCCL_NO_OP:
                 break;
               default:
                 return;
             }
           }
-          if (DO_SYNC && tid == sync_tid && sccltran->has_dependence){
-            __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex);
-            scclFlags[COMPUTE_FLAG_INDEX(dependentBid, iter, dependentStep)].flag = curFlag;
-          }
+          // if (DO_SYNC && tid == sync_tid && sccltran->has_dependence){
+          //   __threadfence();
+          //   uint64_t curFlag = COMPUTE_FLAG(workIndex);
+          //   scclFlags[COMPUTE_FLAG_INDEX(dependentBid, iter, dependentStep)].flag = curFlag;
+          // }
           iter++;
         }
       }
@@ -364,16 +366,18 @@ struct SimpleWrapper2D {
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
         prims.matrixRows = rows;
         prims.matrixCols = ld;
+
         //Align chunk size to the number of columns.
         const int maxChunkSize = stepSize * SCCL_CHUNKSTEPS;
-        chunkSize = min(maxChunkSize, DIVUP((ld*rows),nchunksPerLoop));
+        chunkSize = min(maxChunkSize, DIVUP((ld * rows), nchunksPerLoop));
         if (ROUNDUP(chunkSize, ld) < maxChunkSize) {
-          //Increasing chunkSize if possible
+          //Increase chunkSize if possible
           chunkSize = ALIGN_SIZE(chunkSize, ld);
         } else {
           //Otherwise decrease to align with columns
           chunkSize = ALIGN_DOWN(chunkSize, ld);
         }
+
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rowsPerScclChunk);
         //Make chunkRows a perfect divisor of matrixRows;
@@ -382,8 +386,12 @@ struct SimpleWrapper2D {
             break;
           }
         }
+
+        // if (threadIdx.x == 0 && blockIdx.x == 0 && rank == 0) {
+        //   printf("chunkRows %d chunkld  %d maxChunkSize %d\n", chunkRows, chunkld, maxChunkSize);
+        // }
+
         chunkSize = chunkRows * chunkld;
-        // chunkSize = getSCCLChunkSize<T>(args->comm->buffSizes[NCCL_PROTO_SIMPLE], ld*rows, rows, ld, chunkld, nchunksPerLoop);
         chunkRows = chunkSize/chunkld;
         numRealChunks = ld/chunkld;
       }
@@ -467,9 +475,18 @@ struct SimpleWrapper2DInfo {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       rank(args->comm->rank), numNCCLChunks(0) {
+        
         //Align chunk size to the number of columns.
-        chunkSize = min(stepSize * SCCL_CHUNKSTEPS, DIVUP((ld*rows),nchunksPerLoop));
-        chunkSize = ALIGN_DOWN(chunkSize, ld);
+        const int maxChunkSize = stepSize * SCCL_CHUNKSTEPS;
+        chunkSize = min(maxChunkSize, DIVUP((ld * rows), nchunksPerLoop));
+        if (ROUNDUP(chunkSize, ld) < maxChunkSize) {
+          //Increase chunkSize if possible
+          chunkSize = ALIGN_SIZE(chunkSize, ld);
+        } else {
+          //Otherwise decrease to align with columns
+          chunkSize = ALIGN_DOWN(chunkSize, ld);
+        }
+
         //chunkSize should not have more than 'matrixRows' rows.
         chunkRows = min((chunkSize/chunkld), (int)rowsPerScclChunk);
         //Make chunkRows a perfect divisor of matrixRows;

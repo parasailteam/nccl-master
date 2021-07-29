@@ -381,7 +381,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 1;
+  int totalIters = 100;
   
     float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 
