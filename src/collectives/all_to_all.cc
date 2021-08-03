@@ -23,7 +23,7 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount
     for (int r=0; r<comm->nRanks; r++){
       if (sendcount != 0){
         NCCLCHECK(ncclSend(((char*)sendbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
-        NCCLCHECK(ncclSend(((char*)recvbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
+        NCCLCHECK(ncclRecv(((char*)recvbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
       }
     }
     NCCLCHECK(ncclGroupEnd());   
