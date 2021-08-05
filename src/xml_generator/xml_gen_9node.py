@@ -12,6 +12,8 @@ def CrossNodeNghr(node, g):
 def Rank(node, g):
     return node * ngpuspernode + g
 
+numRanks = nnodes * ngpuspernode
+
 for node in range(nnodes):
     for g in range(ngpuspernode):
         tbindex = 0
