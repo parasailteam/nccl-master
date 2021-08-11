@@ -171,7 +171,7 @@ struct scclChannelInfo {
 
 struct scclFlag {
   uint64_t flag;
-  uint64_t align[3]; // To avoid false sharing
+  uint64_t align[15]; // To avoid false sharing
 };
 
 // gpuId is the one that is in comm->rank

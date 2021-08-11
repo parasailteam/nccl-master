@@ -34,6 +34,20 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
+      int nghrs [] = {1,2,3,4,5,6,7,
+                      0,2,3,4,5,6,7,
+                      0,1,3,4,5,6,7,
+                      0,1,2,4,5,6,7,
+                      0,1,2,3,5,6,7,
+                      0,1,2,3,4,6,7,
+                      0,1,2,3,4,5,7,
+                      0,1,2,3,4,5,6}
+
+      if (bid == 0){
+        int myRank = ring->devUserRanks[0];
+        ncclLLPrimitives<T, FUNC, 7, 1> LLprims(tid, nthreads, &ring->prev, &ring->next, stepLines, channel, comm);
+      }
+
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
@@ -45,7 +59,6 @@ class scclFunction {
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
-
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
         ssize_t srcoffset, dstoffset;
@@ -57,12 +70,12 @@ class scclFunction {
           int8_t dependentStep = sccltran->dependentStep;
           if (sccltran->dependentBid >= 0){
               if (tid == sync_tid){
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              while ((scclFlags + dependentBid)->flag < goalFlag){};
+                uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+                while ((scclFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
           }
-
+          if (tid < args->nThreads-WARP_SIZE){
           srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
@@ -85,8 +98,10 @@ class scclFunction {
             else if (sccltran->type == SCCL_LOCAL_COPY)
                 prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
           }
-          if (sccltran->has_dependence)
+          }
+          if (sccltran->has_dependence){
             __syncthreads();
+          }
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
@@ -218,7 +233,7 @@ struct LLWrapper {
   __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepLines(args->comm->buffSizes[NCCL_PROTO_LL] / (sizeof(union ncclLLFifoLine)*NCCL_STEPS)),
       chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)),
-      prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm) {}
+      prims(tid, args->nThreads-WARP_SIZE, recvPeer, sendPeer, stepLines, channel, args->comm) {}
 
   __device__ size_t initIter(ssize_t sizePerScclChunk, ssize_t gridOffset) {
     ssize_t chunkOffset = gridOffset;

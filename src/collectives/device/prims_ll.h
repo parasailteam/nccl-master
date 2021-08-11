@@ -201,6 +201,8 @@ class ncclLLPrimitives {
   __device__ __forceinline__
   ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepLines, struct ncclChannel* channel, struct ncclDevComm* comm)
     : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), stepLines(stepLines) {
+    if (tid >= nthreads)
+      return;
     // Make sure step is updated before we read it.
     barrier();
 

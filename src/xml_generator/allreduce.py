@@ -6,7 +6,7 @@ print(f'<algo name="allreduce_small" nchunksperloop="{nchunksperloop}" nchannels
 
 for i in range(ngpus):
     tbindex = 0
-    print(f'  <gpu id="{i}" i_chunks="{nchunksperloop}" o_chunks="{nchunksperloop}" s_chunks="{nchunksperloop}">')
+    print(f'  <gpu id="{i}" i_chunks="{nchunksperloop}" o_chunks="{nchunksperloop}" s_chunks="{nchunksperloop*instances}">')
     for j in range(ngpus):
         if i != j:
             for ch in range(instances):
@@ -32,7 +32,7 @@ for i in range(ngpus):
                             print(f'      <step s="{step}" type="re" srcbuf="s" srcoff="{(tbindex+mask)*instances+ch}" dstbuf="s" dstoff="{tbindex*instances+ch}" cnt="1" depid="{tbindex+mask}" deps="{step-1}" hasdep="1"/>')
                         step += 1
                     
-                print(f'      <step s="{step}" type="s" srcbuf="i" srcoff="{i*instances+ch}" dstbuf="i" dstoff="{i*instances+ch}" cnt="1" depid="0" deps="{round(math.log2(ngpus))}" hasdep="0"/>')
+                print(f'      <step s="{step}" type="s" srcbuf="i" srcoff="{i*instances+ch}" dstbuf="i" dstoff="{i*instances+ch}" cnt="1" depid="{0 if tbindex != 0 else -1}" deps="{round(math.log2(ngpus))}" hasdep="0"/>')
                 step += 1
                 print(f'      <step s="{step}" type="r" srcbuf="i" srcoff="{j*instances+ch}" dstbuf="i" dstoff="{j*instances+ch}" cnt="1" depid="-1" deps="-1" hasdep="0"/>')
                 step += 1
