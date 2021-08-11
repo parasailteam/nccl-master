@@ -70,33 +70,20 @@ class scclFunction {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
             int thisCount = min(scclMaxAllowedCount, count-c);
-            switch (sccltran->type) {
-              case SCCL_SEND:
+            if (sccltran->type == SCCL_SEND)
                 prims.send(srcPointer + srcoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV:
+            else if (sccltran->type == SCCL_RECV)
                 prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV_COPY_SEND:
+            else if (sccltran->type == SCCL_RECV_COPY_SEND)
                 prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV_REDUCE_SEND:
+            else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
                 prims.recvReduceSend(srcPointer + srcoffset, thisCount);
-                break;
-              case SCCL_RECV_REDUCE_COPY:
+            else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_REDUCE:
+            else if (sccltran->type == SCCL_REDUCE)
                 prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_LOCAL_COPY:
+            else if (sccltran->type == SCCL_LOCAL_COPY)
                 prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_NO_OP:
-                break;
-              default:
-                return;
-            }
           }
           if (sccltran->has_dependence)
             __syncthreads();

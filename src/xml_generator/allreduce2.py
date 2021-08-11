@@ -1,9 +1,9 @@
 import math
-nchunksperloop = 8
+nchunksperloop = 4
 instances = 1
-ngpus = 8
+ngpus = 4
 nnodes = 2
-print(f'<algo name="allreduce_small" nchunksperloop="{nchunksperloop}" nchannels="{instances}" proto="LL">')
+print(f'<algo name="allreduce_small" nchunksperloop="{nchunksperloop}" nchannels="{instances}" proto="LL" ngpus="{ngpus*nnodes}">')
 for node in range(nnodes):
     for i in range(ngpus):
         tbindex = 0
