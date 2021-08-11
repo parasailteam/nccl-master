@@ -1,6 +1,6 @@
 import math
-nchunksperloop = 8
-instances = 1
+nchunksperloop = 16
+instances = 2
 ngpus = 8
 print(f'<algo name="allreduce_small" nchunksperloop="{nchunksperloop}" nchannels="{instances}" proto="LL" ngpus="{ngpus}">')
 

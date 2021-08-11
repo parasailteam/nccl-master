@@ -141,6 +141,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
     }
     totalNBlocks += nActives;
   }
+  totalNBlocks /= 2;
 
   // set the gridDim accordingly to the number of active elements. if the algorithm is non-SCCL, 
   // it remains the same. otherwise, it is set to the total # threadblocks necessary for SCCL algorithm
