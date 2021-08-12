@@ -242,7 +242,29 @@ class ncclLLPrimitives {
     LLGenericOp<0, 0, 1, 1>(src, dst, nelem);
   }
   __device__ void reduce(const T* src, T* dst, int nelem) {
-    LLGenericOp<0, 0, 2, 1>(src, dst, nelem);
+    #pragma unroll 4
+    for (int offset = 2*tid; offset < nelem; offset += nthreads*2) {
+      T v0 = src[offset];
+      T v1 = src[offset+1];
+      v0 += dst[offset];
+      v1 += dst[offset+1];
+      dst[offset] = v0;
+      dst[offset+1] = v1;
+    }    
+    // LLGenericOp<0, 0, 2, 1>(src, dst, nelem);
+    // #pragma unroll 4
+    // for (int offset = 4*tid; offset < nelem; offset += nthreads*4) {
+    //   __half2 v0 = *(__half2*)&src[offset];
+    //   __half2 v1 = *(__half2*)&src[offset+2];
+    //   __half2 u0 = *(__half2*)&dst[offset];
+    //   __half2 u1 = *(__half2*)&dst[offset+2];
+    //   u0 = __hadd2(v0,u0);
+    //   u1 = __hadd2(v1,u1);
+    //   // u0.x += v0.x; u0.y += v0.y;
+    //   // u1.x += v1.x; u1.y += v1.y;
+    //   *(__half2*)&dst[offset] = u0;
+    //   *(__half2*)&dst[offset+2] = u1;
+    // }
   }
 
   __device__ __forceinline__ ~ncclLLPrimitives() {

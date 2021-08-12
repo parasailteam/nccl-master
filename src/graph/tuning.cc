@@ -309,7 +309,7 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
   if (algorithm == NCCL_ALGO_RING && protocol == NCCL_PROTO_SIMPLE && info->comm->nNodes > 1
       && info->coll == ncclFuncAllReduce && info->nBytes >= info->comm->nRanks/16.0*65536) lat *= 1.9; // Plateau effect of ring
   *time = lat + (info->nBytes) / (1000 * bw);
-  if ((info->coll == ncclFuncAllReduce) && ((info->count % info->comm->nRanks) == 0) && (info->nBytes <= 100*1024) && (info->comm->scclAlgo.ngpus == info->comm->nRanks)){
+  if ((info->coll == ncclFuncAllReduce) && ((info->count % info->comm->nRanks) == 0) && (info->nBytes <= 200*1024) && (info->comm->scclAlgo.ngpus == info->comm->nRanks)){
     if (algorithm != NCCL_ALGO_SCCL && info->comm->bandwidths[ncclFuncAllReduce][NCCL_ALGO_SCCL][NCCL_PROTO_LL] > 0){
 	*time = -1.0; return ncclSuccess;
     }
