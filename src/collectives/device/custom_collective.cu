@@ -9,4 +9,3 @@
 #include "collectives.h"
 
 IMPL_COLL_R(CustomCollective);
-IMPL_COLL_R(CustomCollectiveInfo);

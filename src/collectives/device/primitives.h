@@ -142,6 +142,7 @@ class ncclPrimitives {
       int realSize = max(0, min(dataSize, nelem-offset));
       if (tid < nworkers) {
         if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr+offset;
+        if (SRC == 2 && (role & ROLE_SRC)) srcs[1] = dstPtr+offset;
         if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
         if (DST && (role & ROLE_DST)) dsts[0] = dstPtr+offset;
         if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
@@ -316,6 +317,14 @@ class ncclPrimitives {
     // Direct is only for the send part
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
+  __device__ __forceinline__ void
+  localCopy(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1>(src, dst, nelem, 0);
+  }
+  __device__ __forceinline__ void
+  reduce(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 2, 1>(src, dst, nelem, 0);
+  }  
 
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation

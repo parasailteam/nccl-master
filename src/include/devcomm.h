@@ -130,7 +130,9 @@ struct ncclRing {
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
 #define SCCL_RECV_REDUCE_COPY_SEND 5
-#define SCCL_NO_OP 6
+#define SCCL_LOCAL_COPY 6
+#define SCCL_REDUCE 7
+#define SCCL_NO_OP 8
 
 // TODO: compress this by a lot!
 struct scclTransfer {
@@ -149,13 +151,13 @@ struct scclThreadBlock {
   int8_t sendpeer;
   int8_t recvpeer;
   uint16_t nsteps;
-  uint8_t channelId; // associated channel
+  int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
-#define SCCL_MAX_COUNT 16
+#define SCCL_MAX_COUNT 72
 
 struct scclChannelInfo {
   int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
@@ -170,12 +172,14 @@ struct scclChannelInfo {
 
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
+  // a flag to specify if the SCCL algorithm is a valid one
+  bool isValid;
+  // number of gpus in the group
+  int ngpus;
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // the protocol that the algorithm needs to use
   int protocol;
-  // total number of threadblocks needed by SCCL algorithm
-  int nBlocks; // TODO could be removed
   // bid is used as an index into this array
   struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by SCCL algorithm

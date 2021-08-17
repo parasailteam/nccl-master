@@ -21,7 +21,7 @@
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
-    __device__ void run(struct ncclWorkElem* args) {
+    __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
       struct ncclDevComm* comm = args->comm;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
       const int tid = threadIdx.x;
@@ -40,10 +40,9 @@ class scclFunction {
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel, 1024, scclAlgo->chunkld};
 
-      const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      const ssize_t sizePerScclChunk = (size*sizeMultiplier)/scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -98,12 +97,20 @@ class scclFunction {
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
+              case SCCL_REDUCE:
+                prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_LOCAL_COPY:
+                prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_NO_OP:
                 break;
               default:
                 return;
             }
           }
+          if (sccltran->has_dependence)
+            __syncthreads();
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
             //TODO:
@@ -656,6 +663,14 @@ struct SimpleWrapper {
   __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -712,6 +727,14 @@ struct LL128Wrapper {
   __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -763,6 +786,14 @@ struct LLWrapper {
   
   __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+  
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
