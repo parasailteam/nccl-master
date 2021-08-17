@@ -383,6 +383,19 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
+  __device__ void localCopy(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 1, 1>(src, dst, nelem);
+  }
+
+  __device__ void reduce(const T* src, T* dst, int nelem) {
+    // TODO: This needs to be optimized
+    for (int offset = tid; offset < nelem; offset += nthreads) {
+      T v0 = src[offset];
+      v0 = FUNC()(v0,dst[offset]);
+      dst[offset] = v0;
+    }
+  }
+
   __device__ __forceinline__ ~ncclLL128Primitives() {
     // Save steps for the next operation
     saveRecvSync();

@@ -105,7 +105,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
-
+  if (!base) e->nActives = 1; // This only happens when it is a p2p case
   for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
   }
@@ -365,7 +365,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclFuncAllGather:
       info->pattern = info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRing; break;
     case ncclFuncAllReduce:
-      info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
+      info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
       info->pattern = ncclPatternSccl; break;
     case ncclFuncCustomCollective:
@@ -679,6 +679,7 @@ static ncclResult_t saveP2pOp(struct ncclInfo* info /* input */, struct ncclWork
   elem->p2p.sendCount = info->sendbytes;
   elem->p2p.recvCount = info->recvbytes;
   elem->p2p.delta = info->delta;
+  elem->nActives = 1;
   const int nsegments = s+1;
   int nThreads = 512;
   while (nsegments*nThreads > 512) nThreads /= 2;
