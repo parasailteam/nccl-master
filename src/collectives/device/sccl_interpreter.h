@@ -158,6 +158,7 @@ struct SimpleWrapper {
   
   __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
