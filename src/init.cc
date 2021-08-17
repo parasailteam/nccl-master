@@ -867,7 +867,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-  
   // NetSharedBuffers needs to be set for this to work across nodes.
   if (getenv("SCCL_XML_FILE")  || comm->xmlFile[0] != '\0') {
     //FIXME: Ensure compatibility with SCCL_XML_FILE flag. Remove this flag in future version.

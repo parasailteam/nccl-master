@@ -11,7 +11,7 @@ class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_SIMPLE, 
   public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, args->comm->nRanks);
+      scclfunc.run(args, 1);
     }
 };
 
@@ -20,7 +20,7 @@ class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, F
   public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, args->comm->nRanks);
+      scclfunc.run(args, 1);
     }
 };
 
@@ -29,7 +29,7 @@ class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FUNC
     public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, args->comm->nRanks);
+      scclfunc.run(args, 1);
     }
 };
 

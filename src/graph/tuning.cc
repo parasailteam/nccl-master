@@ -118,10 +118,10 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
       if (coll == ncclFuncAllToAll || coll == ncclFuncCustomCollective || a == NCCL_ALGO_SCCL) {
-        // SCCL algorithm has hooks for AllToAll, AllGather and ReduceScatter
+        // SCCL algorithm has hooks for AllToAll, AllGather, AllReduce and ReduceScatter
         // SCCL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
         for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-          if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol) {
+          if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter  || coll == ncclFuncAllReduce) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol) {
             // Setting the bandwidth and latency values to 1.0 (some arbitrary value) so that they don't get skipped by ncclTopoGetAlgoTime
             comm->bandwidths[coll][a][p] = 1.0;
             comm->latencies[coll][a][p] = 1.0;
@@ -136,7 +136,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
       
       if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
-      if (coll == ncclFuncCustomCollective) continue;
+
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float speed = nNodes <= 2 || a == NCCL_ALGO_COLLNET ? graphs[a]->speedIntra : graphs[a]->speedInter;
         float busBw = graphs[a]->nChannels * speed;

@@ -59,6 +59,7 @@ ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 
+/*Creates a new communicator with a SCCL Custom Collective described in the XML File*/
 ncclResult_t  ncclCommInitRankWithScclXML(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, const char* xmlFile);
 
 /* Creates a clique of communicators (single process version).
@@ -69,6 +70,8 @@ ncclResult_t  ncclCommInitRankWithScclXML(ncclComm_t* comm, int nranks, ncclUniq
  * Order of devlist defines user-order of processors within the communicator. */
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
+
+/*Creates a clique of communicators (single process version) with a SCCL Custom Collective described in XML File*/
 ncclResult_t  ncclCommInitAllWithScclXML(ncclComm_t* comm, int ndev, const int* devlist, const char* xmlFile);
 
 /* Frees resources associated with communicator object, but waits for any operations
@@ -276,7 +279,7 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  * SCCL Collective
  *
  * Run a SCCL Collective. 
- * Value of count is the minimum of send size per rank and receive size per rank.
+ * Value of count is the maximum of elements send per rank and elements receive per rank.
  */
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
