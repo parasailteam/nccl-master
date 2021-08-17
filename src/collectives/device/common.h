@@ -106,6 +106,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         }
         __syncthreads();
       }
+      
       if (w->funcIndex == FINDEX) {
         f.run(w);
       } else {
