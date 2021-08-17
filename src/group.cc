@@ -31,7 +31,7 @@ struct ncclInitArgs {
   int ndev;
   ncclUniqueId commId;
   int myrank;
-  char xmlFile[1024];
+  char xmlFile[1024]; //XML file for ncclComm initialization which can be asynchronous.
 };
 struct ncclCollArgs {
   ncclComm_t comm;
@@ -88,6 +88,7 @@ ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, n
   args->init.ndev = ndev;
   memcpy(&args->init.commId, &commId, sizeof(commId));
   args->init.myrank = myrank;
+  //Copy XML file to args
   memset(args->init.xmlFile, 0, sizeof(args->init.xmlFile));
   if (xmlFile != nullptr) {
     strcpy(&args->init.xmlFile[0], xmlFile);
