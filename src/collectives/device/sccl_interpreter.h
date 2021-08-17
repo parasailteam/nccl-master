@@ -63,8 +63,9 @@ class scclFunction {
           int8_t dependentStep = sccltran->dependentStep;
           if (sccltran->dependentBid >= 0){
               if (tid == sync_tid){
-              //TODO: uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              //while ((scclFlags + dependentBid)->flag < goalFlag){};
+              //TODO:
+              uint64_t goalFlag = COMPUTE_FLAG_INDEX(workIndex, iter, dependentStep);
+              while ((scclFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
           }
@@ -105,8 +106,9 @@ class scclFunction {
           }
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
-            //TODO: uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
-            //scclFlags[bid].flag = curFlag;
+            //TODO:
+            uint64_t curFlag = COMPUTE_FLAG_INDEX(workIndex, iter, i);
+            scclFlags[bid].flag = curFlag;
           }
         }
       }
@@ -163,8 +165,6 @@ class scclFunction2D {
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
-//  2D Chunk equiv of 1D Chunk of 64K with 1024 Matrix Cols = 64 x 1024
-//  2D Chunk of 64K can be = 64 x 1024, 128 x 512, 256 x 256
 
       auto chunkSize = prims.chunkSize;
       auto numChunks = prims.numRealChunks;
@@ -176,9 +176,9 @@ class scclFunction2D {
       const int numScclChunks2D = numTotalChunks/scclAlgo->nchunksPerLoop;
     
       assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
-      int iter;
+      int iter = 0;
 
-      for (iter = 0, gridChunkIdx = 0; gridChunkIdx < numScclChunks2D; gridChunkIdx++) {
+      for (gridChunkIdx = 0; gridChunkIdx < numScclChunks2D; gridChunkIdx++) {
         T* srcPointer, * dstPointer;
 
         for (int i = 0; i < scclTB->nsteps; i++){
@@ -186,8 +186,8 @@ class scclFunction2D {
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
-          int8_t dependentStep = sccltran->dependentStep;
-          int flagsPerBlock = scclAlgo->flagsPerBlock;
+          const int8_t dependentStep = sccltran->dependentStep;
+          const int flagsPerBlock = scclAlgo->flagsPerBlock;
 
           if (DO_SYNC && dependentBid >= 0){
               if (tid == sync_tid){
@@ -199,10 +199,9 @@ class scclFunction2D {
               __syncthreads();
           }
 
-          // srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          // dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          srcPointer = thisInput;
-          dstPointer = thisOutput;
+          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          
           int count = sccltran->count;
 
           for (int c = 0; c < count; c += scclMaxAllowedCount) {     
@@ -237,21 +236,21 @@ class scclFunction2D {
               //   !DO_SYNC ? 0 : (float)((half*)srcPointer)[13370240]);
                 prims.recvReduceCopySend(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
                 break;
-              // case SCCL_RECV_REDUCE_COPY: 
-              // // if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
-              //   prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
-              //   break;
+              case SCCL_RECV_REDUCE_COPY: 
+              // if (threadIdx.x == 0)printf("%d rank %d flagsPerBlock %d iter %d (%d, %d):(%dx%d) index %d\n",bid,  comm->rank, flagsPerBlock, iter, srcBlock.startRow, srcBlock.startCol, srcBlock.rows, srcBlock.cols, dependentBid * flagsPerBlock + iter);
+                prims.recvReduceCopy(i, srcPointer, dstPointer, &srcBlock, &dstBlock, nelemBlock2D(srcBlock)*thisCount);
+                break;
               case SCCL_NO_OP:
                 break;
               default:
                 return;
             }
           }
-          // if (DO_SYNC && tid == sync_tid && sccltran->has_dependence){
-          //   __threadfence();
-          //   uint64_t curFlag = COMPUTE_FLAG(workIndex);
-          //   scclFlags[COMPUTE_FLAG_INDEX(dependentBid, iter, dependentStep)].flag = curFlag;
-          // }
+          if (DO_SYNC && tid == sync_tid && sccltran->has_dependence){
+            __threadfence();
+            uint64_t curFlag = COMPUTE_FLAG(workIndex);
+            scclFlags[COMPUTE_FLAG_INDEX(dependentBid, iter, dependentStep)].flag = curFlag;
+          }
           iter++;
         }
       }
@@ -272,6 +271,20 @@ protected:
     #pragma unroll
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
+      if (SRC) {
+        auto _realSize = (realSize / srcBlock->cols) * srcBlock->cols;
+        // if (threadIdx.x == 0)
+        //   printf("realSize %d _realSize %d %d\n", realSize, _realSize, srcBlock->cols);
+        realSize = _realSize;
+      } else if (DST) {
+        auto _realSize = (realSize / dstBlock->cols) * dstBlock->cols;
+        // if (threadIdx.x == 0)
+        //   printf("realSize %d _realSize %d %d\n", realSize, _realSize, dstBlock->cols);
+        realSize = _realSize;
+      }
+      // else if (DST) {
+      //   realSize = (realSize / srcBlock->cols) * srcBlock->cols;
+      // }
       if (this->tid < this->nworkers) {
         if (SRC && (this->role & ROLE_SRC)) this->srcs[0] = srcPtr;//+offset;
         if (RECV && (this->role & ROLE_WAIT_RECV)) this->waitRecv<SRC, DIRECTRECV>(directOffset+offset);
@@ -286,16 +299,51 @@ protected:
               // ReduceOrCopyMulti2D<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, SRC, DST, Block2D>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
             }
           } else {
-            if (false) {
-              const int numElemsPerLoopPerWarp = UNROLL * (sizeof(Pack128)/sizeof(T)) * warpSize;
-              const int startRow = offset / srcBlock->cols;
-              const int rows = realSize / srcBlock->cols;
-              for (int row = startRow + this->tid/WARP_SIZE; row < startRow + rows; row += this->nworkers/WARP_SIZE) {
-                //TODO: Assing one row to one warp and call ReduceOrCopyMulti.
+            if (SRC || DST) {
+              int chunkCols = (SRC) ? srcBlock->cols : dstBlock->cols; 
+              // const int numElemsPerLoopPerWarp = UNROLL * (sizeof(Pack128)/sizeof(T)) * WARP_SIZE;
+              const int startRow = offset / chunkCols;
+              const int rows = realSize / chunkCols;
+              // if (threadIdx.x == 0) {
+              //   printf("rank %d tid %d %d %d realSize %d offset %d [%d, %d];[%dx%d] nsrcs %d ndsts %d rows %d startRow %d\n", 
+              //   this->comm->rank, threadIdx.x, this->tid, (int)(this->role & ROLE_SRC), realSize, offset, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, chunkCols,
+              //   RECV*this->nrecv+SRC, SEND*this->nsend+DST, rows, startRow);
+              // }
+              int wid = this->tid/WARP_SIZE;
+              int nw = this->nworkers/WARP_SIZE;
+              // assert(nw <= this->nworkers/WARP_SIZE);
+              if (wid < nw) {
+                const T* srcs[RECV*NRECV+SRC];
+                T* dsts[SEND*NSEND+DST];
+                // for (int ii = 0; ii < RECV*this->nrecv+SRC; ii++)
+                //   origSrcs[ii] = this->srcs[ii];
+                // for (int ii = 0; ii < SEND*this->nsend+DST; ii++)
+                //   origDsts[ii] = this->dsts[ii];
+              
+                for (int rowIdx = wid; rowIdx < rows; rowIdx += nw) { //this->nworkers/WARP_SIZE
+                  int row = startRow + rowIdx;
+                  if (SRC)
+                    srcs[0] = srcPtr + (srcBlock->startRow + row) * matrixCols + srcBlock->startCol;
+                  if (DST)
+                    dsts[0] = dstPtr + (dstBlock->startRow + row) * matrixCols + dstBlock->startCol;
+                  for (int ii = SRC; ii < RECV*this->nrecv+SRC; ii++)
+                    srcs[ii] = this->srcs[ii] + rowIdx * chunkCols;
+                  for (int ii = DST; ii < SEND*this->nsend+DST; ii++)
+                    dsts[ii] = this->dsts[ii] + rowIdx * chunkCols;
+                  // if (this->tid % WARP_SIZE == 0) {
+                  //   printf("wid %d tid %d row %d offset %d this->srcs[0] %p srcs[0] %p nsrcs %d this->dsts[0] %p %ld dsts[0] %p ndsts %d\n", 
+                  //              wid, this->tid, row,   offset,   this->srcs[0],   srcs[0],   RECV*this->nrecv+SRC, this->dsts[0], realSize*sizeof(T), dsts[0], SEND*this->nsend+DST);
+                  // } 
+                  const int newRealSize = chunkCols;
+                  ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(this->tid % WARP_SIZE, WARP_SIZE, RECV*this->nrecv+SRC, srcs, SEND*this->nsend+DST, dsts, 
+                                                                                                        newRealSize);
+                }
               }
             } else {
-              ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
-                                                                                                                          offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+              // ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Block2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+              //                                                                                                             offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+              ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts,
+                                                                                                     realSize);
             }
           }
         }
@@ -313,7 +361,7 @@ public:
   size_t matrixRows, matrixCols;
   __device__ __forceinline__
   ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group):
-    invalidBlock(), ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group)
+    ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group)
   {}
   
   __device__ __forceinline__ void
@@ -401,14 +449,14 @@ struct SimpleWrapper2D {
   const bool toPrint = false;
   __device__ __forceinline__ void send(int step, T * src, const Block2D* srcBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      printf("%d [%d, %d] step %d [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
+      // printf("%d [%d, %d] step %d [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
     }
     prims.send(src, srcBlock, 0, nelem);
   }
 
   __device__ __forceinline__ void recv(int step, T * dst, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
+      // printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
     }
     prims.recv(dst, dstBlock, 0, nelem);
   }
@@ -422,15 +470,15 @@ struct SimpleWrapper2D {
   
   __device__ __forceinline__ void recvReduceSend(int step, T * src, const Block2D* srcBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
+      // printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
     }
     prims.recvReduceSend(src, srcBlock, 0, nelem);
   }
 
   __device__ __forceinline__ void recvReduceCopy(int step, T * src, T * dst, const Block2D* srcBlock, const Block2D* dstBlock, int nelem) {
     if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-       printf("%d [%d, %d] step %d  src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols,
-        dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
+      //  printf("%d [%d, %d] step %d  src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols,
+      //   dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
     }
     prims.recvReduceCopy(src, dst, srcBlock, dstBlock, 0, nelem);
   }

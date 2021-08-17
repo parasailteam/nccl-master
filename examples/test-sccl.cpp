@@ -310,11 +310,12 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
     } else if (collType == ReduceScatter || collType == AllReduce) {
       // minibatch_gradients = allreduced_gradient + rank * (size/comm_size);
       //memset_value(minibatch_gradients, (float)(1<<rank), size);
+      // memset_value(minibatch_gradients, (float)(1), size);
       //cudaMemRandInt(minibatch_gradients, size);
       memset_identity(minibatch_gradients, size);
     }
     
-      int warmup = 10;
+      int warmup = 1;
       for (int iter = 0; iter < warmup; iter++) {
       #ifdef ALLREDUCE
         NCCLCHECK(ncclAllReduce((const void*)minibatch_gradients, 
@@ -431,9 +432,9 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 100;
+  int totalIters = 1;
   
-    float elapsedTime = run<float>(rank, ncclHalf, totalIters);
+    float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 
   MPI_Finalize();
   return 0;

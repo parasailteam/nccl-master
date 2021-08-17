@@ -309,7 +309,7 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
   for (int i=0; i<MAXSRCS; i++) srcs[i] = ((const Pack128*)(s[i]+elemOffset))+offset;
   Pack128* dsts[MAXDSTS];
   for (int i=0; i<MAXDSTS; i++) dsts[i] = ((Pack128*)(d[i]+elemOffset))+offset;
-
+  
   while (offset < Npack) {
     Pack128 vals[UNROLL];
     // Load and reduce
