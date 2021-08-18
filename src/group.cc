@@ -75,6 +75,8 @@ void* ncclAsyncThreadMain(void* args_) {
   return args;
 }
 
+//Initialize arguments for async calling of function func. Add xmlFile as extra argument to pass from
+//ncclCommInit API calls to ncclComm.
 ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev, const char* xmlFile) {
   if (ncclGroupIndex >= MAX_ASYNC_OPS) {
     WARN("Too many async operations in progress, max is %d", MAX_ASYNC_OPS);
