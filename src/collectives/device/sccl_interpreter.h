@@ -15,7 +15,9 @@
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
    SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
-template<typename T, typename PRIMS_WRAPPER>
+//Take the input/output type (T), offset type (Offset_t) as size_t or Block2D
+// and primitives wrapper for ncclPrimitives, llprimitives, and ll128primitives
+template<typename T, typename Offset_t, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
@@ -40,6 +42,7 @@ class scclFunction {
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t size = args->coll.count;
       const ssize_t sizePerScclChunk = (size*sizeMultiplier)/scclAlgo->nchunksPerLoop;
+      const size_t numScclChunks = DIVUP(sizePerScclChunk, loopSize);
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -47,9 +50,10 @@ class scclFunction {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
-        ssize_t srcoffset, dstoffset;
+      //Loop over all chunks.
+      for (ssize_t gridChunk = 0; gridChunk < numScclChunks; gridChunk++) {
+        size_t chunkOffset = prims.initIter(sizePerScclChunk, gridChunk*loopSize);
+        Offset_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
           struct scclTransfer* sccltran = &scclTB->transfers[i];
@@ -58,7 +62,7 @@ class scclFunction {
           int8_t dependentStep = sccltran->dependentStep;
           if (sccltran->dependentBid >= 0){
               if (tid == sync_tid){
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+              uint64_t goalFlag = COMPUTE_FLAG(workIndex, gridChunk, dependentStep);
               while ((scclFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
@@ -106,7 +110,7 @@ class scclFunction {
             __syncthreads();
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, gridChunk, i);
             scclFlags[bid].flag = curFlag;
           }
         }
@@ -520,7 +524,7 @@ struct SimpleWrapper2D {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionSimple : public scclFunction<T, SimpleWrapper<FUNC, T, UNROLL>> {};
+class scclFunctionSimple : public scclFunction<T, ssize_t, SimpleWrapper<FUNC, T, UNROLL>> {};
 
 #include "prims_ll128.h"
 template<class FUNC, typename T>
@@ -595,7 +599,7 @@ struct LL128Wrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL128 : public scclFunction<T, LL128Wrapper<FUNC, T>> {};
+class scclFunctionLL128 : public scclFunction<T, ssize_t, LL128Wrapper<FUNC, T>> {};
 
 template<class FUNC, typename T>
 struct LLWrapper {
@@ -666,4 +670,4 @@ struct LLWrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL : public scclFunction<T, LLWrapper<FUNC, T>> {};
+class scclFunctionLL : public scclFunction<T, ssize_t, LLWrapper<FUNC, T>> {};
