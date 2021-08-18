@@ -1,4 +1,4 @@
-<algo name="allreduce_ring_2_ranks_1_channel" nchunksperloop="2" nchannels="1" chunkld="1024" redop="sum" proto="Simple">
+<algo name="allreduce_ring_2_ranks_1_channel" ngpus="2" nchunksperloop="2" nchannels="1" chunkld="1024" redop="sum" proto="Simple">
   <gpu id="0" i_chunks="2" o_chunks="2" s_chunks="0">
     <tb id="0" send="1" recv="1" chan="0">
       <step s="0" type="s" srcbuf="i" srcoff="1" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
