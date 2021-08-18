@@ -12,7 +12,7 @@
 #include <stdint.h>
 
 #define NCCL_NUM_FUNCTIONS 8 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv} ncclFunc_t;
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncCustomCollective2D, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/SCCL/CollNet

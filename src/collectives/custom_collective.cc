@@ -29,7 +29,7 @@ ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const 
     return ncclInvalidArgument;
   }
 
-  struct ncclInfo info = { ncclFuncCustomCollective, "CustomCollective",
+  struct ncclInfo info = { ncclFuncCustomCollective2D, "CustomCollective2D",
     sendbuff, recvbuff, count, datatype, comm->scclAlgo.redOp, 0, comm, stream, /* Args */
     SCCL_CHUNKSTEPS, SCCL_SLICESTEPS};
   info.ld = ld;

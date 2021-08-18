@@ -348,8 +348,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           CUDACHECK(cudaStreamSynchronize(s));
           assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
         } else if (collType == AllReduce) {
-          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           if (iter==0 && datatype != ncclHalf) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
@@ -396,8 +396,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           CUDACHECK(cudaStreamSynchronize(s));
           // assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
         } else if (collType == AllReduce) {
-          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, N[i], size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           // assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
@@ -431,7 +431,7 @@ int main(int argc, char* argv[])
   MPI_Init(&argc, &argv);
 
   int rank;
-  int totalIters = 1;
+  int totalIters = 100;
   
     float elapsedTime = run<float>(rank, ncclFloat, totalIters);
 

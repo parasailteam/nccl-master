@@ -63,7 +63,8 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
   NCCL_FUNCS2B(AllToAll),
-  NCCL_FUNCS2A(CustomCollective)
+  NCCL_FUNCS2A(CustomCollective),
+  NCCL_FUNCS2A(CustomCollective2D)
 };
 
 /*****************************************************************************/
@@ -369,6 +370,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclFuncAllToAll:
       info->pattern = ncclPatternSccl; break;
     case ncclFuncCustomCollective:
+    case ncclFuncCustomCollective2D:
       info->pattern = ncclPatternSccl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
@@ -717,7 +719,7 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
-  if (info->coll == ncclFuncCustomCollective) {
+  if (info->coll == ncclFuncCustomCollective || info->coll == ncclFuncCustomCollective2D) {
     info->comm->bandwidths[info->coll][NCCL_ALGO_SCCL][info->comm->scclAlgo.protocol] = 1.0f;
   }
   // Launch asynchronously if needed
