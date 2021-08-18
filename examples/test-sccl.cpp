@@ -270,8 +270,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
     sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   }
   printf("filename '%s'\n", filename);
-  scclAlgorithm_t scclAlgo;
-  ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename, &scclAlgo);
+  ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename);
   MPI_Barrier(MPI_COMM_WORLD);
   
   if (rank == -1) {
@@ -330,7 +329,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
           CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
           NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+                  (void*)allreduced_gradient, N[i], size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
 
@@ -344,13 +343,13 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           CUDACHECK(cudaMalloc(&minibatch_gradients2, size * sizeof(T)));
           CUDACHECK(cudaMemcpy(minibatch_gradients2, minibatch_gradients, size/comm_size * sizeof(T), cudaMemcpyDeviceToDevice));
           NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+                  (void*)allreduced_gradient, N[i], size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
         } else if (collType == AllReduce) {
-          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           if (iter==0 && datatype != ncclHalf) assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
@@ -380,7 +379,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
         if (collType == AllGather) {
         
           NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, size/comm_size, datatype, comm, s));
+                  (void*)allreduced_gradient, size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
 
@@ -397,8 +396,8 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
           CUDACHECK(cudaStreamSynchronize(s));
           // assert(check_sccl_reducescatter(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));
         } else if (collType == AllReduce) {
-          NCCLCHECK(ncclCustomCollective2D((const void*)minibatch_gradients, 
-                  (void*)allreduced_gradient, N[i], size/comm_size, datatype, comm, s));
+          NCCLCHECK(ncclCustomCollective((const void*)minibatch_gradients, 
+                  (void*)allreduced_gradient, size, datatype, comm, s));
 
           CUDACHECK(cudaStreamSynchronize(s));
           // assert(check_sccl_allreduce(size, rank, iter, comm_size, minibatch_gradients, allreduced_gradient));

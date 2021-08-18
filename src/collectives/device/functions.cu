@@ -79,8 +79,7 @@ __device__ ncclKern_t ncclFuncs[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCC
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
   NCCL_FUNCS2B(AllToAll),
-  NCCL_FUNCS2A(CustomCollective),
-  NCCL_FUNCS2A(CustomCollectiveInfo)  
+  NCCL_FUNCS2A(CustomCollective)
 #endif
 };
 
