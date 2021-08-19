@@ -27,9 +27,7 @@ struct Chunk2D {
     startCol = (chunkIdx % numChunksInCols) * chunkCols;
     startRow = (chunkIdx / numChunksInCols) * chunkRows;
     //Get 
-    int remainingSize = size - (startRow * matrixCols + (matrixRows - startRow) * (matrixCols - startCol));
-    int nelem = min(chunkSize, remainingSize);
-    rows = min(nelem/matrixCols, matrixRows - startRow);
+    rows = min(chunkRows, matrixRows - startRow);
     cols = chunkCols;
   }
 
@@ -188,7 +186,7 @@ struct SimpleWrapper2D {
     return Chunk2D();
   }
 
-  __device__ Chunk2D getOffset(Chunk2D chunkOffset, ssize_t gridChunk, int sccltranOffset, int count, ssize_t sizePerScclChunk) {
+  __device__ Chunk2D getOffset(Chunk2D& chunkOffset, ssize_t gridChunk, int sccltranOffset, int count, ssize_t sizePerScclChunk) {
     int chunkIdx = gridChunk + (sccltranOffset + count)*numScclChunks;
     return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, chunkSize, numRealChunks, matrixRows, matrixCols);
   }
