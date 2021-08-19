@@ -8,6 +8,8 @@
 
 /*Support for Custom Collectives operations on 2D arrays*/
 
+//
+
 //Represents a 2D chunk in the outside array with start coordinate (row, col)
 //and number of rows and columns of chunk.
 struct Chunk2D {
@@ -241,8 +243,12 @@ template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncCustomCollective2D, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, 1);
+      if (threadIdx.x == 0) {
+        printf("CustomCollective 2D does not work in LL128 protocol.\n");
+      }
+
+      // scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
+      // scclfunc.run(args, 1);
     }
 };
 
@@ -250,8 +256,11 @@ template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncCustomCollective2D, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FUNC, T, UNROLL> {
     public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, 1);
+      if (threadIdx.x == 0) {
+        printf("CustomCollective 2D does not work in LL protocol.\n");
+      }
+      // scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
+      // scclfunc.run(args, 1);
     }
 };
 
