@@ -22,11 +22,11 @@ struct Chunk2D {
   }
 
   __device__ __forceinline__ Chunk2D(const ssize_t size, const int chunkIdx, const int chunkRows, const int chunkCols,
-                                     const int chunkSize, const int numChunksInCols, const int matrixRows, const int matrixCols) {
+                                     const int numChunksInCols, const int matrixRows, const int matrixCols) {
     //
     startCol = (chunkIdx % numChunksInCols) * chunkCols;
     startRow = (chunkIdx / numChunksInCols) * chunkRows;
-    //Get 
+    //
     rows = min(chunkRows, matrixRows - startRow);
     cols = chunkCols;
   }
@@ -84,8 +84,8 @@ protected:
 public:
   size_t matrixCols;
   __device__ __forceinline__
-  ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group):
-    ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group)
+  ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group, int matrixCols):
+    ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group), matrixCols(matrixCols)
   {}
   
   __device__ __forceinline__ void
@@ -139,13 +139,12 @@ struct SimpleWrapper2D {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       rank(args->comm->rank),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0, args->ld) {
         struct scclAlgorithm* scclAlgo = &args->comm->scclAlgo;
         chunkCols = scclAlgo->chunkld;
         int nchunksPerLoop = scclAlgo->nchunksPerLoop;
         matrixCols = args->ld; //TODO: make ld to  matrixCols
         matrixRows = size/matrixCols;
-        prims.matrixCols = matrixCols;
 
         //Align chunk size to the number of columns.
         const int maxChunkSize = stepSize * SCCL_CHUNKSTEPS;
@@ -174,7 +173,7 @@ struct SimpleWrapper2D {
         //Number of chunks in the columns
         numRealChunks = matrixCols/chunkCols;
         //Total chunks in the matrix
-        const int numTotalChunks = (matrixRows/chunkRows * matrixCols/chunkCols);
+        const int numTotalChunks = (matrixRows/chunkRows) * (matrixCols/chunkCols);
         //FIXME: Instead of division, DIVUP might also work
         numScclChunks = numTotalChunks/nchunksPerLoop;
         assert(numTotalChunks % nchunksPerLoop == 0);
@@ -188,7 +187,7 @@ struct SimpleWrapper2D {
 
   __device__ Chunk2D getOffset(Chunk2D& chunkOffset, ssize_t gridChunk, int sccltranOffset, int count, ssize_t sizePerScclChunk) {
     int chunkIdx = gridChunk + (sccltranOffset + count)*numScclChunks;
-    return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, chunkSize, numRealChunks, matrixRows, matrixCols);
+    return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, numRealChunks, matrixRows, matrixCols);
   }
   
   __device__ __forceinline__ void send(T * src, const Chunk2D& srcBlock, const Chunk2D& dstBlock, int count) {
