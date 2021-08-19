@@ -244,8 +244,10 @@ class ncclLLPrimitives {
   __device__ void reduce(const T* src, T* dst, int nelem) {
     #pragma unroll 4
     for (int offset = 2*tid; offset < nelem; offset += nthreads*2) {
-      T v0 = FUNC()(src[offset], dst[offset]);
-      T v1 = FUNC()(src[offset+1], dst[offset+1]);
+      T v0 = src[offset];
+      T v1 = src[offset+1];
+      v0 += dst[offset];
+      v1 += dst[offset+1];
       dst[offset] = v0;
       dst[offset+1] = v1;
     }    
