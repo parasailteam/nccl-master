@@ -411,13 +411,11 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
-//2D
-template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
-__device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw, const int t,
+template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Chunk2D>
+__device__ __forceinline__ void ReduceCopy128bMultiChunk2D(const int w, const int nw, const int t,
     int nsrcs, const T** s, int ndsts, T** d, 
-    const uint64_t linearStartOffset, const Block2D* srcBlock, const Block2D* dstBlock,
-    const size_t matrixRows, const size_t matrixCols,
-    const int elemOffset, const int Npack) {
+    const uint64_t linearStartOffset, const Chunk2D* srcBlock, const Chunk2D* dstBlock,
+    const size_t matrixCols, const int elemOffset, const int Npack) {
   const int inc = nw * UNROLL * WARP_SIZE;
   int offset = w * UNROLL * WARP_SIZE + t;
 
@@ -484,11 +482,11 @@ __device__ __forceinline__ void ReduceCopy128bMulti2D(const int w, const int nw,
   }
 }
 
-template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Block2D>
-__device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nthreads,
+template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Chunk2D>
+__device__ __forceinline__ void ReduceOrCopyMultiChunk2D(const int tid, const int nthreads,
     int nsrcs, const T** srcs, int ndsts, T** dsts, 
-    const uint64_t linearStartOffset, const Block2D* srcBlock, const Block2D* dstBlock,
-    const size_t matrixRows, const size_t matrixCols, int N) {
+    const uint64_t linearStartOffset, const Chunk2D* srcBlock, const Chunk2D* dstBlock,
+    const size_t matrixCols, int N) {
   int Nrem = N;
   if (Nrem <= 0) return;
 
@@ -507,6 +505,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nth
 
   int offset = 0;
   if (align == 0) {
+    //FIXME: Assumes the matrix is 128b aligned. Fix this in future versions.
     // fast path: use 128b loads/stores to do the bulk of the work,
     // assuming the pointers we have are all 128-bit aligned.
 
@@ -514,7 +513,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nth
     int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
     int Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti2D<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Block2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixRows, matrixCols, offset, Npack);
+    ReduceCopy128bMultiChunk2D<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Chunk2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixCols, offset, Npack);
 
     Nrem -= Nelem;
     if (Nrem == 0) return;
@@ -524,26 +523,13 @@ __device__ __forceinline__ void ReduceOrCopyMulti2D(const int tid, const int nth
     Npack = Nrem / PACKELEMS;
     Nelem = Npack * PACKELEMS;
 
-    ReduceCopy128bMulti2D<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Block2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixRows, matrixCols, offset, Npack);
+    ReduceCopy128bMultiChunk2D<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Chunk2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixCols, offset, Npack);
 
     Nrem -= Nelem;
     if (Nrem == 0) return;
     offset += Nelem;
     return;
   }
-
-  printf("535: PANIC!! Should not be here\n");
-  // unrolled, by-type (mostly for unaligned buffers)
-  int Nelem = (Nrem / (UNROLL*PACKELEMS/2*WARP_SIZE)) * (UNROLL*PACKELEMS/2*WARP_SIZE); // round down
-
-  //ReduceCopyMulti<FUNC, T, UNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nelem);
-
-  Nrem -= Nelem;
-  if (Nrem == 0) return;
-  offset += Nelem;
-
-  // no unroll, by type. Should finish what's remaining.
-  //ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
 #endif // COMMON_KERNEL_H_

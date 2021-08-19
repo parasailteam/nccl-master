@@ -64,11 +64,12 @@ protected:
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              // ReduceOrCopyMulti2D<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND, SRC, DST, Chunk2D>(this->tid, this->nworkers, 1, this->srcs, this->nsend, this->dsts+1, offset, srcBlock, dstBlock, matrixRows, matrixCols, realSize);
+              // ReduceOrCopyMultiChunk2D<UNROLL, FUNC, T, 1, 1, 1, 1-SEND+NSEND, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+              //                                                                                                                offset, srcBlock, dstBlock, 0, matrixCols, realSize);
             }
           } else {
-            ReduceOrCopyMulti2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
-                                                                                                                        offset, srcBlock, dstBlock, 0, matrixCols, realSize);
+            ReduceOrCopyMultiChunk2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+                                                                                                                             offset, srcBlock, dstBlock, matrixCols, realSize);
           }
         }
       }
