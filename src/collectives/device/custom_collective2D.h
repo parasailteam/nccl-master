@@ -23,7 +23,8 @@ struct Chunk2D {
 
   __device__ __forceinline__ Chunk2D(const ssize_t size, const int chunkIdx, const int chunkRows, const int chunkCols,
                                      const int numChunksInCols, const int matrixRows, const int matrixCols) {
-    //
+    //FIXME: Division is for performance. 
+    //Performance can be significantly improved if numChunksInCols is known at compile time or is always a power of 2.
     startCol = (chunkIdx % numChunksInCols) * chunkCols;
     startRow = (chunkIdx / numChunksInCols) * chunkRows;
     //
@@ -64,8 +65,8 @@ protected:
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              // ReduceOrCopyMultiChunk2D<UNROLL, FUNC, T, 1, 1, 1, 1-SEND+NSEND, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
-              //                                                                                                                offset, srcBlock, dstBlock, 0, matrixCols, realSize);
+              ReduceOrCopyMultiChunk2D<UNROLL, FUNC, T, 1, 1, 1, 1-SEND+NSEND, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
+                                                                                                  offset, srcBlock, dstBlock, matrixCols, realSize);
             }
           } else {
             ReduceOrCopyMultiChunk2D<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST, SRC, DST, Chunk2D>(this->tid, this->nworkers, RECV*this->nrecv+SRC, this->srcs, SEND*this->nsend+DST, this->dsts, 
