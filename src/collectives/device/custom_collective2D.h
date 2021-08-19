@@ -189,52 +189,27 @@ struct SimpleWrapper2D {
 
   const bool toPrint = false;
   __device__ __forceinline__ void send(T * src, const Chunk2D& srcBlock, const Chunk2D& dstBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
-    }
-    int nelem = srcBlock.nelem();
-    prims.send(src, &srcBlock, 0, nelem*count);
+    prims.send(src, &srcBlock, 0, srcBlock.nelem()*count);
   }
 
   __device__ __forceinline__ void recv(T * dst, const Chunk2D& dstBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
-    }
-    int nelem = dstBlock.nelem();
-    prims.recv(dst, &dstBlock, 0, nelem*count);
+    prims.recv(dst, &dstBlock, 0, dstBlock.nelem()*count);
   }
 
   __device__ __forceinline__ void recvCopySend(T * dst, const Chunk2D& dstBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.startRow, dstBlock.startCol, dstBlock.chunkRows, dstBlock.cols);
-    }
-    int nelem = dstBlock.nelem();
-    prims.recvCopySend(dst, &dstBlock, 0, nelem*count);
+    prims.recvCopySend(dst, &dstBlock, 0, dstBlock.nelem()*count);
   }
   
   __device__ __forceinline__ void recvReduceSend(T * src, const Chunk2D& srcBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d  [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols);
-    }
-    int nelem = srcBlock.nelem();
-    prims.recvReduceSend(src, &srcBlock, 0, nelem*count);
+    prims.recvReduceSend(src, &srcBlock, 0, srcBlock.nelem()*count);
   }
 
   __device__ __forceinline__ void recvReduceCopy(T * src, const Chunk2D& srcBlock, T * dst, const Chunk2D& dstBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && blockIdx.x == 0) {
-      //  printf("%d [%d, %d] step %d  src: [%d, %d]; [%d, %d] nelem %d, dst: [%d, %d]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, srcBlock->startRow, srcBlock->startCol, srcBlock->rows, srcBlock->cols,
-      //   dstBlock->startRow, dstBlock->startCol, dstBlock->rows, dstBlock->cols);
-    }
-    int nelem = srcBlock.nelem();
-    prims.recvReduceCopy(src, dst, &srcBlock, &dstBlock, 0, nelem*count);
+    prims.recvReduceCopy(src, dst, &srcBlock, &dstBlock, 0, srcBlock.nelem()*count);
   }
   
   __device__ __forceinline__ void recvReduceCopySend(T * src, const Chunk2D& srcBlock, T * dst, const Chunk2D& dstBlock, int count) {
-    if (toPrint && threadIdx.x == 0 && rank == 0 && blockIdx.x == 0) {
-      // printf("%d [%d, %d] step %d nelem %d, [%ld, %ld]; [%d, %d] \n", __LINE__, rank, blockIdx.x, step, dstBlock.nelem(), dstBlock.startRow, dstBlock.startCol, dstBlock.chunkRows, dstBlock.cols);
-    }
-    int nelem = srcBlock.nelem();
-    prims.recvReduceCopySend(src, dst, &srcBlock, &dstBlock, 0, nelem*count);
+    prims.recvReduceCopySend(src, dst, &srcBlock, &dstBlock, 0, srcBlock.nelem()*count);
   }
 
   __device__ void reduce(T * srcPointer, const Chunk2D& srcoffset, T * dstPointer, const Chunk2D& dstoffset, int count) {
