@@ -21,13 +21,16 @@ struct Chunk2D {
     startRow = startCol = rows = cols = -1;
   }
 
-  __device__ __forceinline__ Chunk2D(const ssize_t size, const int chunkIdx, const int chunkSize, const int numChunks, 
-                                      const int chunkRows, const int cols, const int _rows, const int ld) {
-    this->startRow = chunkIdx / numChunks * chunkRows;
-    this->startCol = chunkIdx % numChunks * cols;
-    int nelem = min(chunkSize, (int)(size - (this->startRow * ld + (_rows - this->startRow) * (ld - (ld - this->startCol)))));
-    this->rows = min(nelem/cols, _rows - startRow);
-    this->cols = cols;
+  __device__ __forceinline__ Chunk2D(const ssize_t size, const int chunkIdx, const int chunkRows, const int chunkCols,
+                                     const int chunkSize, const int numChunksInCols, const int matrixRows, const int matrixCols) {
+    //
+    startCol = (chunkIdx % numChunksInCols) * chunkCols;
+    startRow = (chunkIdx / numChunksInCols) * chunkRows;
+    //Get 
+    int remainingSize = size - (startRow * matrixCols + (matrixRows - startRow) * (matrixCols - startCol));
+    int nelem = min(chunkSize, remainingSize);
+    rows = min(nelem/matrixCols, matrixRows - startRow);
+    cols = chunkCols;
   }
 
   __device__ __forceinline__ int nelem() const {
@@ -126,10 +129,11 @@ struct SimpleWrapper2D {
   int numRealChunks;
   int rank;
   int chunkRows;
-  int chunkld;
+  int chunkCols;
   ssize_t numScclChunks;
   int matrixRows;
-  
+  int matrixCols;
+
   ncclPrimitives2D<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   __device__ __forceinline__ SimpleWrapper2D(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, ssize_t size, ssize_t sizePerScclChunk,
@@ -139,57 +143,56 @@ struct SimpleWrapper2D {
       rank(args->comm->rank),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
         struct scclAlgorithm* scclAlgo = &args->comm->scclAlgo;
-        int ld = args->ld;
-        int rows = size/ld;
-        matrixRows = rows;  
-        chunkld = scclAlgo->chunkld;
+        chunkCols = scclAlgo->chunkld;
         int nchunksPerLoop = scclAlgo->nchunksPerLoop;
-        prims.matrixCols = ld;
+        matrixCols = args->ld; //TODO: make ld to  matrixCols
+        matrixRows = size/matrixCols;
+        prims.matrixCols = matrixCols;
 
         //Align chunk size to the number of columns.
         const int maxChunkSize = stepSize * SCCL_CHUNKSTEPS;
-        chunkSize = min(maxChunkSize, DIVUP((ld * rows), nchunksPerLoop));
-        if (ROUNDUP(chunkSize, ld) < maxChunkSize) {
+        //Divide size equally into chunks
+        chunkSize = min(maxChunkSize, DIVUP(size, nchunksPerLoop));
+        //Align chunk size with number of columns
+        if (ROUNDUP(chunkSize, matrixCols) < maxChunkSize) {
           //If possible increase chunkSize to align with chunk cols
-          chunkSize = ALIGN_SIZE(chunkSize, ld);
+          chunkSize = ALIGN_SIZE(chunkSize, matrixCols);
         } else {
           //Otherwise decrease
-          chunkSize = ALIGN_DOWN(chunkSize, ld);
+          chunkSize = ALIGN_DOWN(chunkSize, matrixCols);
         }
 
-        //chunkSize should not have more than 'matrixRows' rows.
-        chunkRows = min((chunkSize/chunkld), (int)rows);
-        //Make chunkRows a perfect divisor of matrixRows;
+        //Limit number of rows in chunk to matrix rows
+        chunkRows = min(chunkSize/chunkCols, matrixRows);
+        //FIXME: Need to make chunkRows a perfect divisor of matrixRows.
+        //Find a better way to acheive this
         for (; chunkRows >= 1; chunkRows--) {
-          if (rows % chunkRows == 0) {
+          if (matrixRows % chunkRows == 0) {
             break;
           }
         }
-
-        // if (threadIdx.x == 0 && blockIdx.x == 0 && rank == 0) {
-        //   printf("chunkRows %d chunkld  %d maxChunkSize %d\n", chunkRows, chunkld, maxChunkSize);
-        // }
-
-        chunkSize = chunkRows * chunkld;
-        numRealChunks = ld/chunkld;
-        const int numTotalChunks = (rows/chunkRows * ld/chunkld);
-        //TODO: Instead of division, DIVUP might also work
-        numScclChunks = numTotalChunks/scclAlgo->nchunksPerLoop;
-        assert(numTotalChunks % scclAlgo->nchunksPerLoop == 0);
+        //Get the final size of chunk
+        chunkSize = chunkRows * chunkCols;
+        //Number of chunks in the columns
+        numRealChunks = matrixCols/chunkCols;
+        //Total chunks in the matrix
+        const int numTotalChunks = (matrixRows/chunkRows * matrixCols/chunkCols);
+        //FIXME: Instead of division, DIVUP might also work
+        numScclChunks = numTotalChunks/nchunksPerLoop;
+        assert(numTotalChunks % nchunksPerLoop == 0);
       }
 
 
   __device__ __forceinline__ Chunk2D initIter(int iter, int step) {
-    //Does nothing here
+    //Do nothing here
     return Chunk2D();
   }
 
   __device__ Chunk2D getOffset(Chunk2D chunkOffset, ssize_t gridChunk, int sccltranOffset, int count, ssize_t sizePerScclChunk) {
-    int srcChunkIdx = gridChunk + (sccltranOffset + count)*numScclChunks;
-    return Chunk2D(matrixRows*prims.matrixCols, srcChunkIdx, chunkSize, numRealChunks, chunkRows, chunkld, matrixRows, prims.matrixCols);
+    int chunkIdx = gridChunk + (sccltranOffset + count)*numScclChunks;
+    return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, chunkSize, numRealChunks, matrixRows, matrixCols);
   }
-
-  const bool toPrint = false;
+  
   __device__ __forceinline__ void send(T * src, const Chunk2D& srcBlock, const Chunk2D& dstBlock, int count) {
     prims.send(src, &srcBlock, 0, srcBlock.nelem()*count);
   }
