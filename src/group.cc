@@ -69,7 +69,6 @@ thread_local struct ncclAsyncArgs ncclGroupArgs[MAX_ASYNC_OPS];
 
 void* ncclAsyncThreadMain(void* args_) {
   struct ncclAsyncArgs* args = (struct ncclAsyncArgs*)args_;
-  //Call ncclComm initialization function asynchronously
   NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank, args->init.cudaDev));
   return args;
 }
@@ -88,7 +87,6 @@ ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, n
   args->init.ndev = ndev;
   memcpy(&args->init.commId, &commId, sizeof(commId));
   args->init.myrank = myrank;
-
   return ncclSuccess;
 }
 

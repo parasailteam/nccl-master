@@ -864,7 +864,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
   // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("SCCL_XML_FILE")) {   
+  if (getenv("SCCL_XML_FILE")){
     if (scclGetAlgoFromXMLAndSetComm(comm, getenv("SCCL_XML_FILE")) == ncclSuccess){
       comm->scclAlgo.isValid = true;
     } else {
