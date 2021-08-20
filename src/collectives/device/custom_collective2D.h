@@ -6,9 +6,9 @@
 
 #include "sccl_interpreter.h"
 
-/*Support for Custom Collectives operations on 2D arrays*/
-
-//
+/* Custom Collectives operations on 2D Matrix, by dividing the Matrix is 
+ * divided into several 2D chunks.
+ */
 
 //Represents a 2D chunk in the outside array with start coordinate (row, col)
 //and number of rows and columns of chunk.
@@ -23,11 +23,11 @@ struct Chunk2D {
 
   __device__ __forceinline__ Chunk2D(const ssize_t size, const int chunkIdx, const int chunkRows, const int chunkCols,
                                      const int numChunksInCols, const int matrixRows, const int matrixCols) {
-    //FIXME: Division is for performance. 
+    //FIXME: Division is bad for performance. 
     //Performance can be significantly improved if numChunksInCols is known at compile time or is always a power of 2.
     startCol = (chunkIdx % numChunksInCols) * chunkCols;
     startRow = (chunkIdx / numChunksInCols) * chunkRows;
-    //
+    //Number of rows of chunk must be minimum of chunkRows and remaining rows in matrix.
     rows = min(chunkRows, matrixRows - startRow);
     cols = chunkCols;
   }
@@ -84,7 +84,7 @@ protected:
   }
 
 public:
-  size_t matrixCols;
+  const size_t matrixCols;
   __device__ __forceinline__
   ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group, int matrixCols):
     ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group), matrixCols(matrixCols)
