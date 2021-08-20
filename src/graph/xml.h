@@ -79,7 +79,7 @@ static ncclResult_t xmlGetAttr(struct ncclXmlNode* node, const char* attrName, c
 static bool xmlHasAttrStr(struct ncclXmlNode* node, const char* attrName) {
   const char* value;
   NCCLCHECK(xmlGetAttr(node, attrName, &value));
-  if (*value == NULL) {
+  if (value == NULL) {
     return false;
   }
   return true;
