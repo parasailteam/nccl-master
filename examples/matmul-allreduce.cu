@@ -1,7 +1,7 @@
 //nvcc matmul-allreduce.cu -std=c++11 -Xcompiler -fopenmp,-O3 -lcudadevrt -lcudart -I/usr/include/x86_64-linux-gnu/mpi -I.. -I/usr/local/cuda/include/ -I ../build/include/ -L../build/lib/ -L/usr/local/cuda/lib64/ -lnccl -lcublas -lcurand -c && mpicxx matmul-allreduce.o -I/usr/local/cuda/include/ -I../build/include/ -L../build/lib/ -L/usr/local/cuda/lib64/ -lcudart -lnccl -lcublas -Wall -lcurand -lcudadevrt -std=c++11 -fopenmp -o matmul-allreduce
 
 #include "header.h"
-#define GPT2_PARAMS
+#define GPT3_PARAMS
 #ifdef GPT2_PARAMS
   #include "cutlass-matmul.h"
 #else
@@ -227,7 +227,7 @@ int main(int argc, char** argv){
     int MODEL_PARALLEL_GPUS[] = {2, 2, 2, 2};
     float MODEL_PARAMS[] = {8.3, 8.3, 8.3, 8.3, 8.3};
   #else
-    int SEQUENCE_LENGTH = 2048;  
+    int SEQUENCE_LENGTH = 1;  
     // int MODEL_PARALLEL_GPUS[] = {1, 2, 4, 8, 16};
     // float MODEL_PARAMS[] = {0.345, 1.2, 2.5, 4.2, 8.3};
 
