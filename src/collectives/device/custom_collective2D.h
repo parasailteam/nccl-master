@@ -119,6 +119,16 @@ public:
   recvReduceCopySend(const T* src, T* dst, const Chunk2D* srcBlock, const Chunk2D* dstBlock, int offset, int nelem) {
     GenericOp2D<0, 0, 1, 1, 1, 1>(src, dst, srcBlock, dstBlock, nelem, offset);
   }
+
+  __device__ __forceinline__ 
+  void reduce(const T* src, const Chunk2D* srcBlock, T* dst, const Chunk2D* dstBlock, int nelem) {
+    GenericOp2D<0, 0, 0, 0, 2, 1>(src, dst, srcBlock, dstBlock, nelem, 0);
+  }
+
+  __device__ __forceinline__ 
+  void localCopy(const T* src, const Chunk2D* srcBlock, T* dst, const Chunk2D* dstBlock, int nelem) {
+    GenericOp2D<0, 0, 0, 0, 1, 1>(src, dst, srcBlock, dstBlock, nelem, 0);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -216,16 +226,12 @@ struct SimpleWrapper2D {
     prims.recvReduceCopySend(src, dst, &srcBlock, &dstBlock, 0, srcBlock.nelem()*count);
   }
 
-  __device__ void reduce(T * srcPointer, const Chunk2D& srcoffset, T * dstPointer, const Chunk2D& dstoffset, int count) {
-    // T* srcChunkPointer = srcPointer + srcoffset;
-    // T* dstChunkPointer = dstPointer + dstoffset;
-    // prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void reduce(T * src, const Chunk2D& srcBlock, T * dst, const Chunk2D& dstBlock, int count) {
+    prims.reduce(src, &srcBlock, dst, &dstBlock, srcBlock.nelem()*count);
   }
 
-  __device__ void localCopy(T * srcPointer, const Chunk2D& srcoffset, T * dstPointer, const Chunk2D& dstoffset, int count) {
-    // T* srcChunkPointer = srcPointer + srcoffset;
-    // T* dstChunkPointer = dstPointer + dstoffset;
-    // prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void localCopy(T * src, const Chunk2D& srcBlock, T * dst, const Chunk2D& dstBlock, int count) {
+    prims.reduce(src, &srcBlock, dst, &dstBlock, srcBlock.nelem()*count);
   }
 };
 
