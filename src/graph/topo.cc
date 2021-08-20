@@ -670,7 +670,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   if (xmlHasAttrStr(topNode, "chunkCols")) {
     NCCLCHECK(xmlGetAttrInt(topNode, "chunkCols", &chunkCols));
   } else {
-    chunkCols = -1;
+    chunkCols = 0;
   }
 
   const char* redop;

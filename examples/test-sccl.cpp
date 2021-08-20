@@ -270,7 +270,7 @@ float run(int rank,const ncclDataType_t datatype, int totalIters)
     sprintf(filename, "allreduce_ring_%d_ranks_%d_channel_2D_chunks.xml", comm_size, nChannels);
   }
   printf("filename '%s'\n", filename);
-  ncclCommInitRankWithScclXML(&comm, comm_size, id, rank, filename);
+  ncclCommInitRank(&comm, comm_size, id, rank);
   MPI_Barrier(MPI_COMM_WORLD);
   
   if (rank == -1) {

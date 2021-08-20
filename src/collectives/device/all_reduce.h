@@ -42,9 +42,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
       ssize_t offset;
       int nelem;
       int chunk;
-      // if (threadIdx.x == 0) {
-      //   printf("[%d, %d] gridOffset %ld size %ld nranks*loopSize %ld realChunkSize %ld\n", comm->rank, blockIdx.x, gridOffset, size, nranks*loopSize, realChunkSize);
-      // }
+      
       // step 0: push data to next GPU
       chunk = ring->devUserRanks[nranks-1];
       offset = chunkOffset + chunk * realChunkSize;

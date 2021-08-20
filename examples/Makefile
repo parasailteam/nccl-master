@@ -92,7 +92,7 @@ test-sccl-16-run-12-channels: test-sccl
 	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=12 -x NCCL_MAX_NCHANNELS=12 ./test-sccl
 
 test-sccl-16-run-24-channels: test-sccl
-	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_BUFFSIZE=6291456 -x NCCL_NTHREADS=256 -x NCCL_ALGO=Ring -x NCCL_MIN_NCHANNELS=24 -x NCCL_MAX_NCHANNELS=24 ./test-sccl
+	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_BUFFSIZE=6291456 -x SCCL_XML_FILE=allreduce_ring_16_ranks_24_channel_2D_chunks.xml -x NCCL_NTHREADS=256 -x NCCL_ALGO=Ring -x NCCL_MIN_NCHANNELS=24 -x NCCL_MAX_NCHANNELS=24 ./test-sccl
 
 test-sccl-16-run-16-channels: test-sccl
 	mpirun -np 16 -x LD_LIBRARY_PATH="../build/lib/:/usr/local/cuda/lib64/:$LD_LIBRARY_PATH" -x NCCL_INFO=DEBUG -x NCCL_ALGO=SCCL -x NCCL_MIN_NCHANNELS=16 -x NCCL_MAX_NCHANNELS=16 ./test-sccl

@@ -170,6 +170,12 @@ struct scclChannelInfo {
   int nBlocksForChannel;
 };
 
+
+struct scclFlag {
+  uint64_t flag;
+  uint64_t align[3]; // To avoid false sharing
+};
+
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
   // a flag to specify if the SCCL algorithm is a valid one

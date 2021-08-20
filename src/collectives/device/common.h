@@ -93,7 +93,6 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   /* To optimize for latency, (only) the first operation is passed as argument.*/
   if (channelId == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
   int wrappedAround = 0;
-
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;

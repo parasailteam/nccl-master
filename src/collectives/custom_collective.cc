@@ -24,8 +24,8 @@ ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const 
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   
-  if (comm->scclAlgo.chunkCols == 0) {
-    WARN("Chunk Columns in SCCL XML set by 'chunkCols' should be greater than 0\n");
+  if (comm->scclAlgo.chunkCols <= 0) {
+    WARN("Chunk Columns in SCCL XML set by 'chunkCols=\"%d\"' should be greater than 0\n", comm->scclAlgo.chunkCols);
     return ncclInvalidUsage;
   }
 

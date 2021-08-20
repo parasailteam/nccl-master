@@ -7,7 +7,6 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
-#include <assert.h>
 
 #define SCCL_MAX_ITER 65536
 
@@ -135,9 +134,7 @@ struct SimpleWrapper {
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       chunkSize(stepSize * SCCL_CHUNKSTEPS),
       numScclChunks(DIVUP(sizePerScclChunk, chunkSize)),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {
-
-      }
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
 
   __device__ size_t initIter(ssize_t sizePerScclChunk, ssize_t gridOffset) {
     int realChunkSize = min(chunkSize, sizePerScclChunk-gridOffset);
@@ -152,23 +149,23 @@ struct SimpleWrapper {
   }
 
   __device__ void send(T * srcPointer, ssize_t srcoffset, ssize_t dstoffset, int count) {
-    T* chunkPointer = srcPointer + srcoffset;
-    prims.directSend(chunkPointer, dstoffset, nelem*count);
+    T* srcChunkPointer = srcPointer + srcoffset;
+    prims.directSend(srcChunkPointer, dstoffset, nelem*count);
   }
 
   __device__ void recv(T * dstPointer, ssize_t dstoffset, int count) {
-    T* chunkPointer = dstPointer + dstoffset;
-    prims.directRecv(chunkPointer, dstoffset, nelem*count);
+    T* dstChunkPointer = dstPointer + dstoffset;
+    prims.directRecv(dstChunkPointer, dstoffset, nelem*count);
   }
 
   __device__ void recvCopySend(T * dstPointer, ssize_t dstoffset, int count) {
-    T* chunkPointer = dstPointer + dstoffset;
-    prims.directRecvCopySend(chunkPointer, dstoffset, nelem*count);
+    T* dstChunkPointer = dstPointer + dstoffset;
+    prims.directRecvCopySend(dstChunkPointer, dstoffset, nelem*count);
   }
   
   __device__ void recvReduceSend(T * srcPointer, ssize_t srcoffset, int count) {
-    T* chunkPointer = srcPointer + srcoffset;
-    prims.recvReduceSend(chunkPointer, nelem*count);
+    T* srcChunkPointer = srcPointer + srcoffset;
+    prims.recvReduceSend(srcChunkPointer, nelem*count);
   }
 
   __device__ void recvReduceCopy(T * srcPointer, ssize_t srcoffset, T * dstPointer, ssize_t dstoffset, int count) {

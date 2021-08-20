@@ -6,6 +6,8 @@
 
 #include "sccl_interpreter.h"
 
+#include <assert.h>
+
 /* Custom Collectives operations on 2D Matrix, by dividing the Matrix is 
  * divided into several 2D chunks.
  */
@@ -42,6 +44,7 @@ template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV,
 class ncclPrimitives2D : public ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC> {
 protected:
   const Chunk2D* invalidBlock = nullptr;
+  const size_t matrixCols;
 
   //Similar to ncclPrimitives::GenericOp function but takes Chunk2D instead of offsets.
   //Chunk2D represents the block of src/dst to process.
@@ -84,7 +87,6 @@ protected:
   }
 
 public:
-  const size_t matrixCols;
   __device__ __forceinline__
   ncclPrimitives2D(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group, int matrixCols):
     ncclPrimitives<UNROLL, SLICESPERCHUNK, SLICESTEPS, T, NRECV, NSEND, DIRECT, FUNC>(tid, nworkers, recvPeers, sendPeers, directBuff, stepSize, channel, comm, ptrs, group), matrixCols(matrixCols)
@@ -267,9 +269,6 @@ class ncclFunction<ncclFuncCustomCollective2D, NCCL_ALGO_SCCL, NCCL_PROTO_LL128,
       if (threadIdx.x == 0) {
         printf("CustomCollective 2D does not work in LL128 protocol.\n");
       }
-
-      // scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
-      // scclfunc.run(args, 1);
     }
 };
 
@@ -280,8 +279,6 @@ class ncclFunction<ncclFuncCustomCollective2D, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FU
       if (threadIdx.x == 0) {
         printf("CustomCollective 2D does not work in LL protocol.\n");
       }
-      // scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      // scclfunc.run(args, 1);
     }
 };
 
