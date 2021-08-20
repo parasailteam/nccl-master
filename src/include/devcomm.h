@@ -199,8 +199,8 @@ struct scclAlgorithm {
   struct scclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
-  //Size of the leading dimension of the chunk
-  int chunkld;
+  //Number of columns of the 2D chunk
+  int chunkCols;
   //Number of flags for each block
   int flagsPerBlock;
 };
@@ -242,7 +242,7 @@ struct ncclWorkElem {
   void * scratchbuff;
 
   //Leading dimension of Matrix
-  size_t ld;
+  size_t cols;
 
   // Op-specific fields.
   union {

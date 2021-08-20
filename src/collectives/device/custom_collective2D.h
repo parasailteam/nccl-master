@@ -151,11 +151,11 @@ struct SimpleWrapper2D {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       rank(args->comm->rank),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0, args->ld) {
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0, args->cols) {
         struct scclAlgorithm* scclAlgo = &args->comm->scclAlgo;
-        chunkCols = scclAlgo->chunkld;
+        chunkCols = scclAlgo->chunkCols;
         int nchunksPerLoop = scclAlgo->nchunksPerLoop;
-        matrixCols = args->ld; //TODO: make ld to  matrixCols
+        matrixCols = args->cols;
         matrixRows = size/matrixCols;
 
         //Align chunk size to the number of columns.

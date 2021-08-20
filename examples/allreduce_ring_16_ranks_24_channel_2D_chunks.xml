@@ -1,4 +1,4 @@
-<algo name="test_16_ring8" nchunksperloop="384" nchannels="24" chunkld="1024" redop="sum" ngpus="16" proto="Simple">
+<algo name="test_16_ring8" nchunksperloop="384" nchannels="24" chunkCols="1024" redop="sum" ngpus="16" proto="Simple">
   <gpu id="0" i_chunks="384" o_chunks="384" s_chunks="0">
     <tb id="0" send="1" recv="15" chan="0">
       <step s="0" type="s" srcbuf="i" srcoff="360" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>

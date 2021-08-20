@@ -666,8 +666,12 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
-  int chunkld;
-  NCCLCHECK(xmlGetAttrInt(topNode, "chunkld", &chunkld));
+  int chunkCols;
+  if (xmlHasAttrStr(topNode, "chunkCols")) {
+    NCCLCHECK(xmlGetAttrInt(topNode, "chunkCols", &chunkCols));
+  } else {
+    chunkCols = -1;
+  }
 
   const char* redop;
   NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
@@ -702,7 +706,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
 
   scclAlgo->nChannels = globalNChannels;
   scclAlgo->nchunksPerLoop  = nchunksPerLoop;
-  scclAlgo->chunkld = chunkld;
+  scclAlgo->chunkCols = chunkCols;
   for (int s=0; s<topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "gpu") == 0){

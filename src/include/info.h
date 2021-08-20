@@ -57,8 +57,8 @@ struct ncclInfo {
   // this scratchBuffer can be accessed on the device. The management of this memory is on scclAlgorithm
   void* scratchbuff;
 
-  //Leading dimension of input matrix to collectives
-  ssize_t ld;
+  //Columns of input matrix to collectives
+  ssize_t cols;
 };
 
 #endif

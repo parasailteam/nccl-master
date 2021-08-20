@@ -18,20 +18,25 @@ ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t c
   return ncclEnqueueCheck(&info);
 }
 
-NCCL_API(ncclResult_t, ncclCustomCollective2D, const void* sendbuff, void* recvbuff, const size_t ld, size_t count,
+NCCL_API(ncclResult_t, ncclCustomCollective2D, const void* sendbuff, void* recvbuff, const size_t cols, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
-ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const size_t ld, size_t count,
+ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const size_t cols, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   
-  if (ld % comm->scclAlgo.chunkld != 0) {
-    WARN("Lead dimension %ld need to be divislbe by chunk leading dimension %d\n.", ld, comm->scclAlgo.chunkld);
+  if (comm->scclAlgo.chunkCols == 0) {
+    WARN("Chunk Columns in SCCL XML set by 'chunkCols' should be greater than 0\n");
+    return ncclInvalidUsage;
+  }
+
+  if (cols % comm->scclAlgo.chunkCols != 0) {
+    WARN("Columns %ld need to be divislbe by chunk columns %d\n.", cols, comm->scclAlgo.chunkCols);
     return ncclInvalidArgument;
   }
 
   struct ncclInfo info = { ncclFuncCustomCollective2D, "CustomCollective2D",
     sendbuff, recvbuff, count, datatype, comm->scclAlgo.redOp, 0, comm, stream, /* Args */
     SCCL_CHUNKSTEPS, SCCL_SLICESTEPS};
-  info.ld = ld;
+  info.cols = cols;
   return ncclEnqueueCheck(&info);
 }
