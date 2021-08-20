@@ -96,13 +96,28 @@ public:
   }
 
   __device__ __forceinline__ void
+  directSend(const T* src, const Chunk2D* srcBlock, ssize_t directOffset, int nelem) {
+    GenericOp2D<0, 1, 0, 1, 1, 0>(src, NULL, srcBlock, invalidBlock, nelem, directOffset);
+  }
+
+  __device__ __forceinline__ void
   recv(T* dst, const Chunk2D* dstBlock, int offset, int nelem) {
     GenericOp2D<0, 0, 1, 0, 0, 1>(NULL, dst, invalidBlock, dstBlock, nelem, offset);
   }
 
   __device__ __forceinline__ void
+  directRecv(T* dst, const Chunk2D* dstBlock, ssize_t directOffset, int nelem) {
+    GenericOp2D<1, 0, 1, 0, 0, 1>(NULL, dst, invalidBlock, dstBlock, nelem, directOffset);
+  }
+
+  __device__ __forceinline__ void
   recvCopySend(T* dst, const Chunk2D* dstBlock, int offset, int nelem) {
     GenericOp2D<0, 0, 1, 1, 0, 1>(NULL, dst, invalidBlock, dstBlock, nelem, offset);
+  }
+
+  __device__ __forceinline__ void
+  directRecvCopySend(T* dst, const Chunk2D* dstBlock, ssize_t directOffset, int nelem) {
+    GenericOp2D<1, 1, 1, 1, 0, 1>(NULL, dst, invalidBlock, dstBlock, nelem, directOffset);
   }
 
   __device__ __forceinline__ void
@@ -135,9 +150,8 @@ template<class FUNC, typename T, int UNROLL>
 struct SimpleWrapper2D {
   const int nthreads;
   const int stepSize;
+  int numChunksInCols;
   int chunkSize;
-  int numRealChunks;
-  int rank;
   int chunkRows;
   int chunkCols;
   ssize_t numScclChunks;
@@ -150,7 +164,6 @@ struct SimpleWrapper2D {
                                              T * thisOutput, struct ncclChannel* channel)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
-      rank(args->comm->rank),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0, args->cols) {
         struct scclAlgorithm* scclAlgo = &args->comm->scclAlgo;
         chunkCols = scclAlgo->chunkCols;
@@ -183,7 +196,7 @@ struct SimpleWrapper2D {
         //Get the final size of chunk
         chunkSize = chunkRows * chunkCols;
         //Number of chunks in the columns
-        numRealChunks = matrixCols/chunkCols;
+        numChunksInCols = matrixCols/chunkCols;
         //Total chunks in the matrix
         const int numTotalChunks = (matrixRows/chunkRows) * (matrixCols/chunkCols);
         //FIXME: Instead of division, DIVUP might also work
@@ -199,19 +212,19 @@ struct SimpleWrapper2D {
 
   __device__ Chunk2D getOffset(Chunk2D& chunkOffset, ssize_t gridChunk, int sccltranOffset, int count, ssize_t sizePerScclChunk) {
     int chunkIdx = gridChunk + (sccltranOffset + count)*numScclChunks;
-    return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, numRealChunks, matrixRows, matrixCols);
+    return Chunk2D(matrixRows*matrixCols, chunkIdx, chunkRows, chunkCols, numChunksInCols, matrixRows, matrixCols);
   }
   
   __device__ __forceinline__ void send(T * src, const Chunk2D& srcBlock, const Chunk2D& dstBlock, int count) {
-    prims.send(src, &srcBlock, 0, srcBlock.nelem()*count);
+    prims.directSend(src, &srcBlock, 0, srcBlock.nelem()*count);
   }
 
   __device__ __forceinline__ void recv(T * dst, const Chunk2D& dstBlock, int count) {
-    prims.recv(dst, &dstBlock, 0, dstBlock.nelem()*count);
+    prims.directRecv(dst, &dstBlock, 0, dstBlock.nelem()*count);
   }
 
   __device__ __forceinline__ void recvCopySend(T * dst, const Chunk2D& dstBlock, int count) {
-    prims.recvCopySend(dst, &dstBlock, 0, dstBlock.nelem()*count);
+    prims.directRecvCopySend(dst, &dstBlock, 0, dstBlock.nelem()*count);
   }
   
   __device__ __forceinline__ void recvReduceSend(T * src, const Chunk2D& srcBlock, int count) {
