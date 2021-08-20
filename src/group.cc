@@ -31,7 +31,6 @@ struct ncclInitArgs {
   int ndev;
   ncclUniqueId commId;
   int myrank;
-  char xmlFile[1024]; //XML file for ncclComm initialization which can be asynchronous.
 };
 struct ncclCollArgs {
   ncclComm_t comm;
@@ -70,12 +69,11 @@ thread_local struct ncclAsyncArgs ncclGroupArgs[MAX_ASYNC_OPS];
 
 void* ncclAsyncThreadMain(void* args_) {
   struct ncclAsyncArgs* args = (struct ncclAsyncArgs*)args_;
-  //Call ncclComm initialization function asynchronously
-  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank, args->init.cudaDev, args->init.xmlFile));
+  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank, args->init.cudaDev));
   return args;
 }
 
-ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev, const char* xmlFile) {
+ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev) {
   if (ncclGroupIndex >= MAX_ASYNC_OPS) {
     WARN("Too many async operations in progress, max is %d", MAX_ASYNC_OPS);
     return ncclAsyncErrCheck(ncclInvalidUsage);
@@ -89,12 +87,6 @@ ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, n
   args->init.ndev = ndev;
   memcpy(&args->init.commId, &commId, sizeof(commId));
   args->init.myrank = myrank;
-  //Copy XML file to args
-  memset(args->init.xmlFile, 0, sizeof(args->init.xmlFile));
-  if (xmlFile != nullptr) {
-    strcpy(&args->init.xmlFile[0], xmlFile);
-  }
-
   return ncclSuccess;
 }
 
