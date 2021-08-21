@@ -61,7 +61,8 @@ protected:
         if (SRC && (this->role & ROLE_SRC)) this->srcs[0] = srcPtr;//Do not add offset
         if (RECV && (this->role & ROLE_WAIT_RECV)) this->waitRecv<SRC, DIRECTRECV>(directOffset+offset);
         if (DST && (this->role & ROLE_DST)) this->dsts[0] = dstPtr;//Do not add offset
-        if (SEND && (this->role & ROLE_WAIT_SEND)) this->waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
+        // (1+ DIRECTSEND - 1) is there to avoid warning "expression has no effect" in case of only DIRECTSEND
+        if (SEND && (this->role & ROLE_WAIT_SEND)) this->waitSend<DST, 1+DIRECTSEND-1>(directOffset+offset, realSize*sizeof(T));
         if (realSize > 0) {
           this->subBarrier();
           if (DIRECTRECV && this->srcs[0] == this->dsts[0]) {
