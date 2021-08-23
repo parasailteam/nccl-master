@@ -642,17 +642,39 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
   return ncclSuccess;
 }
 
-ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str) {
-  INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
+ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str){
+  INFO(NCCL_ENV, "SCCL_XML_FILES set by environment to %s", str);
+  char* tokStr = strdup(str);
+  char* tmpStr;
+  char* token = strtok_r(tokStr, ",", &tmpStr);
+  comm->numberOfSCCAlgorithms = 0;
+  while (token) {
+    if (comm->numberOfSCCAlgorithms == SCCL_MAX_ALGORITHMS){
+      WARN("Too many SCCL algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+      break;
+    }
+    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCAlgorithms];
+    if (scclGetAlgoFromXMLAndSetComm(comm, token, scclAlgo) == ncclSuccess){
+      comm->numberOfSCCAlgorithms++;
+    } else {
+      WARN("SCCL algorithm %s failed to initialize. Will be ignored.", token);
+    }
+    token = strtok_r(NULL, ",", &tmpStr);
+  }
+  free(tokStr);
+  return ncclSuccess;
+}
+
+ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str, struct scclAlgorithm* scclAlgo) {
   struct ncclXml* xml;
 
   NCCLCHECK(ncclCalloc(&xml, 1));
   NCCLCHECK(scclGetXmlAlgoFromFile(str, xml));
   int rank = comm->rank;
 
-  struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
   // zeroing out all entries.
   memset(scclAlgo, 0, sizeof(struct scclAlgorithm));
+  scclAlgo->isValid = false; // set isValid to false until we hit the return ncclSuccess.
   struct ncclXmlNode* topNode;
   NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
   int ngpus;
@@ -695,6 +717,46 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
     scclAlgo->protocol = NCCL_PROTO_LL;
   } else {
     WARN("Protocol %s is not supported.", protocol);
+    return ncclInvalidUsage;
+  }
+
+  const int64_t minBytes;
+  NCCLCHECK(xmlGetAttrInt64_t(topNode, "minBytes", &minBytes));
+  const int64_t maxBytes;
+  NCCLCHECK(xmlGetAttrInt64_t(topNode, "maxBytes", &maxBytes));
+  if (minBytes > maxBytes) {
+    WARN("minBytes cannot be greater than maxBytes.");
+    return ncclInvalidUsage;
+  }
+  if (minBytes < 0) {
+    WARN("minBytes cannot be negative.");
+    return ncclInvalidUsage;
+  }
+  if (maxBytes < 0) {
+    WARN("maxBytes cannot be negative.");
+    return ncclInvalidUsage;
+  }
+  scclAlgo->minBytes = minBytes;
+  scclAlgo->maxBytes = maxBytes;
+
+  const char* collectiveType;
+  NCCLCHECK(xmlGetAttrStr(topNode, "coll", &collectiveType));
+  if (strcmp(collective_type, "allreduce") == 0){
+    scclAlgo->collectiveType = ncclFuncAllReduce;
+  } else if (strcmp(collective_type, "allgather") == 0){
+    scclAlgo->collectiveType = ncclFuncAllGather;
+  } else if (strcmp(collective_type, "reduce") == 0){
+    scclAlgo->collectiveType = ncclFuncReduce;
+  } else if (strcmp(collective_type, "broadcast") == 0){
+    scclAlgo->collectiveType = ncclFuncBroadcast;
+  } else if (strcmp(collective_type, "alltoall") == 0){
+    scclAlgo->collectiveType = ncclFuncAllToAll;
+  } else if (strcmp(collective_type, "reduce_scatter") == 0){
+    scclAlgo->collectiveType = ncclFuncReduceScatter;
+  } else if (strcmp(collective_type, "custom") == 0){
+    scclAlgo->collectiveType = ncclFuncCustomCollective;
+  } else {
+    WARN("Collective type %s is not supported.", collectiveType);
     return ncclInvalidUsage;
   }
 
@@ -924,6 +986,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
     }
   }
   free(xml);
+  scclAlgo->isValid = true; // all went well, set isValid to true
   return ncclSuccess;
 }
 

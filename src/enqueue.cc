@@ -315,9 +315,11 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   for (int a=0; a<nAlgos; a++) {
     for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
       float time;
-      NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, &time));
+      int scclAlgoIndex = -1;
+      NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, &time, &scclAlgoIndex, info->comm));
       if (time >= 0 && time < minTime) {
         info->algorithm = a;
+        info->scclAlgoIndex = scclAlgoIndex;
         info->protocol = p;
         minTime = time;
       }
@@ -559,6 +561,16 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     WARN("scclAlgo.nChannels must be positive!\n");
     return ncclInternalError;
   }
+
+  if (info->algorithm == NCCL_ALGO_SCCL) {
+    // SCCL needs to synchronie all channels to be at the same tail point.
+    int firstChannelTail = info->comm->channels->workFifoTail;
+    for (int i = 0; i < info->comm->nChannels; i++) {
+      struct ncclChannel* channel = info->comm->channels+i;
+      channel->workFifoTail = firstChannelTail;
+    }
+  }
+
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;

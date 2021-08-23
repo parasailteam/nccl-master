@@ -90,6 +90,12 @@ static ncclResult_t xmlGetAttrInt(struct ncclXmlNode* node, const char* attrName
   *value = strtol(str, NULL, 0);
   return ncclSuccess;
 }
+static ncclResult_t xmlGetAttrInt64_t(struct ncclXmlNode* node, const char* attrName, int64_t* value) {
+  const char* str;
+  NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
+  *value = strtoll(str, NULL, 0);
+  return ncclSuccess;
+}
 
 static ncclResult_t xmlGetAttrFloat(struct ncclXmlNode* node, const char* attrName, float* value) {
   const char* str;

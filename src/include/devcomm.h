@@ -179,12 +179,16 @@ struct scclFlag {
 struct scclAlgorithm {
   // a flag to specify if the SCCL algorithm is a valid one
   bool isValid;
+  // the type of collective this algorithm is
+  ncclFunc_t collectiveType;
   // number of gpus in the group
   int ngpus;
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // the protocol that the algorithm needs to use
   int protocol;
+  // the range of size in which this algorithm is performant
+  int64_t minBytes; int64_t maxBytes;
   // bid is used as an index into this array
   struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by SCCL algorithm
@@ -288,11 +292,13 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
+#define SCCL_MAX_NUM_ALGOS 4
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  struct scclAlgorithm scclAlgo;
+  int numberOfSCCAlgorithms;
+  struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;

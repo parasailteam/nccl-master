@@ -41,6 +41,7 @@ struct ncclInfo {
   int sliceSteps;
   // Computed later
   int algorithm;
+  int scclAlgorithmIndex; // Used to indentify SCCL algorithm
   int protocol;
   ncclPattern_t pattern;
   int nChannels;
