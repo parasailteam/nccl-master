@@ -170,7 +170,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->scclAlgo.flags));
+  CUDACHECK(cudaFree(comm->scclAlgoShared.scclFlags));
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
@@ -197,10 +197,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
   // free up SCCL allocated scratchPad
-  if (comm->scclAlgo.scratchBuffer != NULL && comm->scclAlgo.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->scclAlgo.scratchBuffer));
-    comm->scclAlgo.scratchBuffer = NULL;
-    comm->scclAlgo.scratchBufferSize = 0;
+  if (comm->scclAlgoShared.scratchBuffer != NULL && comm->scclAlgoShared.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->scclAlgoShared.scratchBuffer));
+    comm->scclAlgoShared.scratchBuffer = NULL;
+    comm->scclAlgoShared.scratchBufferSize = 0;
   }
 
   // Poison comm to try and catch a double free
@@ -281,9 +281,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
-  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgo.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgoShared.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // SCCL algo is copied to the device side
-  comm->hostDevComm.scclAlgo = comm->scclAlgo;
+  comm->hostDevComm.scclAlgos = comm->scclAlgos;
+  comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));

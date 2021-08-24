@@ -197,17 +197,19 @@ struct scclAlgorithm {
   struct scclChannelInfo scclChannels[MAXCHANNELS];
   // number of scratch chunks that SCCL will use
   int nScratchChunks;
-  // declaration for scratchBuffer. This is only to be accessed by the host
-  size_t scratchBufferSize;
-  void* scratchBuffer;
   //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
   //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
   ncclRedOp_t redOp;
+};
 
+struct scclAlgorithmShared {
   // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
-  struct scclFlag* flags;
+  struct scclFlag* scclFlags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
-  int flagsNeedReset;
+  int scclFlagsNeedReset;
+  // declaration for scratchBuffer. This is only to be accessed by the host
+  size_t scratchBufferSize;
+  void* scratchBuffer;
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -239,7 +241,6 @@ struct ncclWorkElem {
   // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
   uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
-  uint8_t isScclAlgorithm; // right now, 0 indicates not a sccl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scclAlgorithms.
   uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
 
   const void * sendbuff;
@@ -297,8 +298,11 @@ struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
+
+  // SCCL related elements
   int numberOfSCCAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
+  struct scclAlgorithmShared scclAlgoShared;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
