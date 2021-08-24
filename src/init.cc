@@ -170,7 +170,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->scclAlgoShared.scclFlags));
+  CUDACHECK(cudaFree(comm->scclAlgoShared.flags));
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
@@ -283,7 +283,8 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   NCCLCHECK(ncclCudaCalloc(&comm->scclAlgoShared.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // SCCL algo is copied to the device side
-  comm->hostDevComm.scclAlgos = comm->scclAlgos;
+  for (int i = 0; i < comm->numberOfSCCAlgorithms; i++)
+    comm->hostDevComm.scclAlgos[i] = comm->scclAlgos[i];
   comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
   
   // Duplicate the dev comm on the device
@@ -878,19 +879,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
 
     for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
-      struct scclAlgorithm* scclAglo = &comm->scclAlgos[scclAlgoIndex];
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){
         // Connect SCCL graph only if it was a valid algorithm
         if (comm->nChannels < scclAlgo->nChannels){
           WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", scclAlgo->nChannels, comm->nChannels, scclAlgo->nChannels);
           scclAlgo->isValid = false;
         }
-      }
-      if (scclAlgo->isValid){
         for (int c=0; c<scclAlgo->nChannels; c++) {
           struct ncclChannel* channel = comm->channels+c;
           if (comm->nRanks == 1) continue;
-          struct scclChannelInfo* scclChannel = &comm->scclAlgo->scclChannels[c];
+          struct scclChannelInfo* scclChannel = &scclAlgo->scclChannels[c];
           NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
         }
       }
