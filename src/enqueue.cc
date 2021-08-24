@@ -161,7 +161,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   }
 
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
-    comm->scclAlgo.flagsNeedReset = 1;
+    comm->scclAlgoShared.flagsNeedReset = 1;
 
   params->func = ncclKerns[elem->funcIndex];
   return ncclSuccess;
@@ -344,13 +344,13 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   if (info->protocol == NCCL_PROTO_SIMPLE) nt += WARP_SIZE; // Extra warp for sync
   if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_TREE) nt += WARP_SIZE;
   info->nChannels = nc;
-  // SCCL needs exactly comm->scclAlgo.nChannels.
+  // SCCL needs exactly scclAlgo.nChannels.
   if (info->algorithm == NCCL_ALGO_SCCL){
-    if (comm->scclAlgo.nChannels > comm->nChannels){
-      WARN("Come must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgo.nChannels, comm->nChannels);
+    if (comm->scclAlgos[info->scclAlgoIndex].nChannels > comm->nChannels){
+      WARN("Come must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
       return ncclInternalError;
     }
-    info->nChannels = comm->scclAlgo.nChannels;
+    info->nChannels = comm->scclAlgos[info->scclAlgoIndex].nChannels;
   }
   info->nThreads = nt;
   return ncclSuccess;
@@ -396,7 +396,7 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
     case ncclPatternSccl:
       // SCCL needs a specific number of steps per loop for each channel/connection. it is set properly in ncclProxySaveColl
       // n chunks per loop identifies how many chunks from the input buffer is processed in each iteration.
-      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->scclAlgo.nchunksPerLoop; break;
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->scclAlgos[info->scclAlgoIndex].nchunksPerLoop; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -405,16 +405,17 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
 }
 
 static ncclResult_t adjustSCCLScratchPad(struct ncclInfo* info) {
-  scclAlgorithm* scclAlgo = &info->comm->scclAlgo;
+  struct scclAlgorithm* scclAlgo = &info->comm->scclAlgos[info->scclAlgoIndex];
+  struct scclAlgorithmShared* scclAlgoShared = &info->comm->scclAlgoShared;
   size_t sizeNeeded = info->nBytes * (size_t)DIVUP(scclAlgo->nScratchChunks, scclAlgo->nchunksPerLoop);
-  if (sizeNeeded > scclAlgo->scratchBufferSize){
-    if (scclAlgo->scratchBufferSize > 0 && scclAlgo->scratchBuffer != NULL){
-      CUDACHECK(cudaFree(scclAlgo->scratchBuffer));
+  if (sizeNeeded > scclAlgoShared->scratchBufferSize){
+    if (scclAlgoShared->scratchBufferSize > 0 && scclAlgoShared->scratchBuffer != NULL){
+      CUDACHECK(cudaFree(scclAlgoShared->scratchBuffer));
     }
-    NCCLCHECK(ncclCudaCalloc((char**)&scclAlgo->scratchBuffer, sizeNeeded));
-    scclAlgo->scratchBufferSize = sizeNeeded;
+    NCCLCHECK(ncclCudaCalloc((char**)&scclAlgoShared->scratchBuffer, sizeNeeded));
+    scclAlgoShared->scratchBufferSize = sizeNeeded;
   }
-  info->scratchbuff = scclAlgo->scratchBuffer;
+  info->scratchbuff = scclAlgoShared->scratchBuffer;
   return ncclSuccess;
 }
 
@@ -427,7 +428,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getLoopInfo(info));
 
   if (info->algorithm == NCCL_ALGO_SCCL){
-    if (info->comm->scclAlgo.nChannels == 0){
+    if (info->comm->scclAlgos[info->scclAlgoIndex].nChannels == 0){
       WARN("SCCL algorithm's nchannels shouldn't be 0!");
       return ncclInternalError;
     }
@@ -543,9 +544,9 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
   }
 
-  if (info->comm->scclAlgo.flagsNeedReset == 1){
-    CUDACHECK(cudaMemsetAsync(info->comm->scclAlgo.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
-    info->comm->scclAlgo.flagsNeedReset = 0;
+  if (info->comm->scclAlgoShared.flagsNeedReset == 1){
+    CUDACHECK(cudaMemsetAsync(info->comm->scclAlgoShared.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+    info->comm->scclAlgoShared.flagsNeedReset = 0;
   }
 
   struct ncclWorkElem work;
@@ -557,7 +558,10 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
   int nChannels = work.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
-  if (info->algorithm == NCCL_ALGO_SCCL && info->comm->scclAlgo.nChannels == 0) {
+  struct scclAlgorithm* scclAlgo = NULL;
+  if (info->algorithm == NCCL_ALGO_SCCL)
+    scclAlgo = &info->comm->scclAlgos[info->scclAlgoIndex];
+  if (info->algorithm == NCCL_ALGO_SCCL && scclAlgo->nChannels == 0) {
     WARN("scclAlgo.nChannels must be positive!\n");
     return ncclInternalError;
   }
@@ -574,7 +578,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-    work.nActives = (info->algorithm == NCCL_ALGO_SCCL) ? info->comm->scclAlgo.scclChannels[channelId % info->comm->scclAlgo.nChannels].nBlocksForChannel : 1;
+    work.nActives = (info->algorithm == NCCL_ALGO_SCCL) ? scclAlgo->scclChannels[channelId % scclAlgo->nChannels].nBlocksForChannel : 1;
     // Proxy
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
@@ -582,7 +586,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
 
-    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scclAlgo));
+    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scclAlgos[info->scclAlgoIndex]));
 
     info->comm->myParams->gridDim.x++;
     work.coll.bid = bid % nChannels;
@@ -727,7 +731,7 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   if (info->coll == ncclFuncCustomCollective) {
-    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgo.protocol] = 1.0f;
+    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgos[info->scclAlgoIndex].protocol] = 1.0f;
   }
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {

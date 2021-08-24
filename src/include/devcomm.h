@@ -206,7 +206,7 @@ struct scclAlgorithmShared {
   // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
   struct scclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
-  int scclFlagsNeedReset;
+  int flagsNeedReset;
   // declaration for scratchBuffer. This is only to be accessed by the host
   size_t scratchBufferSize;
   void* scratchBuffer;
