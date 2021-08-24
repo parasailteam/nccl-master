@@ -286,6 +286,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   for (int i = 0; i < comm->numberOfSCCAlgorithms; i++)
     comm->hostDevComm.scclAlgos[i] = comm->scclAlgos[i];
   comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
+  comm->hostDevComm.numberOfSCCAlgorithms = comm->numberOfSCCAlgorithms;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));

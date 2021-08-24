@@ -312,7 +312,10 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   if (info->comm->collNetSupport)
     NCCLCHECK(collNetReduceSupport(info->datatype, info->op, &collNetTypeSupport));
   if (collNetTypeSupport != 1) nAlgos--;
-  if (info->scclAlgoIndex == -1){
+  if (info->scclAlgoIndex >= 0){
+    info->algorithm = NCCL_ALGO_SCCL;
+    info->protocol = info->comm->scclAlgos[info->scclAlgoIndex].protocol;
+  } else {
     // Otherwise, SCCL algorithm is already selected.
     for (int a=0; a<nAlgos; a++) {
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
