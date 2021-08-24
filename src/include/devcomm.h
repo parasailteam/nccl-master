@@ -238,10 +238,12 @@ struct ncclWorkElem {
   uint16_t nThreads;
   uint16_t funcIndex;
   uint16_t index;
+
   // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
   uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
   uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  int scclAlgoIndex; // taken from info->scclAlgoIndex
 
   const void * sendbuff;
   void * recvbuff;

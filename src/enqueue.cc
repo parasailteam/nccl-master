@@ -446,6 +446,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->coll.count = info->count;
   work->coll.nChannels = info->nChannels;
   work->nThreads = info->nThreads;
+  work->scclAlgoIndex = info->scclAlgoIndex;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
