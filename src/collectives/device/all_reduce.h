@@ -42,7 +42,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
       ssize_t offset;
       int nelem;
       int chunk;
-
+      
       // step 0: push data to next GPU
       chunk = ring->devUserRanks[nranks-1];
       offset = chunkOffset + chunk * realChunkSize;

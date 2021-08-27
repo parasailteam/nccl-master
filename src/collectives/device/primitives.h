@@ -41,7 +41,7 @@
 // Implementation of primitive types
 template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives {
- private:
+ protected:
   const int tid;
   int nthreads;
   int nworkers;
@@ -261,7 +261,7 @@ class ncclPrimitives {
     loadRecvConn(channel, directBuff);
     loadSendConn(channel);
   }
-
+   
   __device__ __forceinline__ void
   send(const T* src, int nelem) {
     GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, nelem, 0);

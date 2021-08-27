@@ -270,12 +270,22 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
     ncclComm_t comm, cudaStream_t stream);
 
 /*
- * SCCL Collective
- *
- * Run a SCCL Collective. 
+ * SCCL Collectives
+ */
+
+ /*
+ * Run a SCCL Collective using 1-Dimensional chunks. 
  * Value of count is the maximum of elements send per rank and elements receive per rank.
  */
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
+
+/*
+ * Run a SCCL Collective on 2-D Matrix using 2-Dimensional chunks. 
+ * Value of count is the maximum of elements send per rank and elements receive per rank.
+ * cols is the number of columns in the input Matrix.
+ */
+ncclResult_t ncclCustomCollective2D(const void* sendbuff, void* recvbuff, const size_t cols, size_t count,
     ncclDataType_t datatype, ncclComm* comm, cudaStream_t stream);
 
 /*

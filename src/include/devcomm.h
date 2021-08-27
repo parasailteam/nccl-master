@@ -11,8 +11,8 @@
 #include "align.h"
 #include <stdint.h>
 
-#define NCCL_NUM_FUNCTIONS 7 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv} ncclFunc_t;
+#define NCCL_NUM_FUNCTIONS 8 // SendRecv not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncCustomCollective2D, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/SCCL/CollNet
@@ -170,6 +170,7 @@ struct scclChannelInfo {
   int nBlocksForChannel;
 };
 
+
 struct scclFlag {
   uint64_t flag;
   uint64_t align[3]; // To avoid false sharing
@@ -204,6 +205,10 @@ struct scclAlgorithm {
   struct scclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
+  //Number of columns of the 2D chunk
+  int chunkCols;
+  //Number of flags for each block
+  int flagsPerBlock;
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -242,6 +247,9 @@ struct ncclWorkElem {
   void * recvbuff;
   void * scratchbuff;
 
+  //Leading dimension of Matrix
+  size_t cols;
+
   // Op-specific fields.
   union {
     struct {
@@ -257,13 +265,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[6];
+    uint64_t align[21];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x40*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {

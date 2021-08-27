@@ -61,6 +61,7 @@
   DECL2(AllToAll, Sum) \
   DECL5(SendRecv, RING, SIMPLE, Sum, int8_t) \
   DECL(CustomCollective) \
+  DECL(CustomCollective2D) \
 
 DECL_ALL
 

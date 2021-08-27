@@ -16,4 +16,6 @@
 #define ALIGN_SIZE(size, align) \
   size = ((size + (align) - 1) / (align)) * (align);
 
+#define ALIGN_DOWN(size, align) \
+  (((size))/(align)) * (align)
 #endif

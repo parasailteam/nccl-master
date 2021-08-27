@@ -411,4 +411,125 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
+template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Chunk2D>
+__device__ __forceinline__ void ReduceCopy128bMultiChunk2D(const int w, const int nw, const int t,
+    int nsrcs, const T** s, int ndsts, T** d, 
+    const uint64_t linearStartOffset, const Chunk2D* srcBlock, const Chunk2D* dstBlock,
+    const size_t matrixCols, const int elemOffset, const int Npack) {
+  const int inc = nw * UNROLL * WARP_SIZE;
+  int offset = w * UNROLL * WARP_SIZE + t;
+
+  const Pack128* srcs[MAXSRCS];
+  for (int i=0; i<MAXSRCS; i++) srcs[i] = ((const Pack128*)(s[i]+elemOffset))+offset;
+  Pack128* dsts[MAXDSTS];
+  for (int i=0; i<MAXDSTS; i++) dsts[i] = ((Pack128*)(d[i]+elemOffset))+offset;
+
+  while (offset < Npack) {
+    Pack128 vals[UNROLL];
+    // Load and reduce
+    if (SRC) {
+      for (int u = 0; u < UNROLL; ++u) {
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+        const int chunkElemRow = chunkElemOffset / srcBlock->cols;
+        const int chunkElemCol = chunkElemOffset % srcBlock->cols;
+        ssize_t idx = (srcBlock->startRow + chunkElemRow) * matrixCols + (srcBlock->startCol + chunkElemCol);
+        Fetch128(vals[u], (const Pack128*)(s[0]+idx));
+      }
+    } else {
+      for (int u = 0; u < UNROLL; ++u) Fetch128(vals[u], srcs[0]+u*WARP_SIZE);
+    }
+
+    #pragma unroll
+    for (int i=1; i<MINSRCS; i++) {
+      Pack128 vals2[UNROLL];
+      for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+      for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+    }
+    #pragma unroll
+    for (int i=MINSRCS; i<MAXSRCS; i++) {
+      if (i<nsrcs) {
+        Pack128 vals2[UNROLL];
+        for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
+        for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+      }
+    }
+
+    // Store
+    if (DST) {
+      for (int u = 0; u < UNROLL; ++u) {
+        const size_t chunkElemOffset = (linearStartOffset + elemOffset  + (offset + u*WARP_SIZE)*(sizeof(Pack128)/sizeof(T)));
+
+        const int chunkElemRow = chunkElemOffset / dstBlock->cols;
+        const int chunkElemCol = chunkElemOffset % dstBlock->cols;
+        size_t idx = ((dstBlock->startRow + chunkElemRow) * matrixCols + (dstBlock->startCol + chunkElemCol));
+        Store128((Pack128*)(d[0]+idx), vals[u]);
+      }
+    }
+    #pragma unroll
+    for (int i = DST; i < MINDSTS; i++) {
+      for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+    }
+    #pragma unroll
+    for (int i=MINDSTS; i<MAXDSTS; i++) {
+      if (i<ndsts) {
+        for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+      }
+    }
+    for (int i=0; i<MAXSRCS; i++) srcs[i] += inc;
+    for (int i=0; i<MAXDSTS; i++) dsts[i] += inc;
+    offset += inc;
+  }
+}
+
+template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS, int SRC, int DST, typename Chunk2D>
+__device__ __forceinline__ void ReduceOrCopyMultiChunk2D(const int tid, const int nthreads,
+    int nsrcs, const T** srcs, int ndsts, T** dsts, 
+    const uint64_t linearStartOffset, const Chunk2D* srcBlock, const Chunk2D* dstBlock,
+    const size_t matrixCols, int N) {
+  int Nrem = N;
+  if (Nrem <= 0) return;
+
+  int w = tid / WARP_SIZE;       // Warp number
+  int nw = nthreads / WARP_SIZE; // Number of warps
+  int t = tid % WARP_SIZE;       // Thread (inside the warp)
+
+  // Check that all is 16B aligned. If not don't use 16B load/stores.
+  int align = 0;
+  #pragma unroll
+  for (int i=0; i<MINSRCS; i++) align |= ptrAlign128(srcs[i]);
+  for (int i=MINSRCS; i<MAXSRCS && i<nsrcs; i++) align |= ptrAlign128(srcs[i]);
+  #pragma unroll
+  for (int i=0; i<MINDSTS; i++) align |= ptrAlign128(dsts[i]);
+  for (int i=MINDSTS; i<MAXDSTS && i<ndsts; i++) align |= ptrAlign128(dsts[i]);
+
+  int offset = 0;
+  if (align == 0) {
+    //FIXME: Assumes the matrix is 128b aligned. Fix this in future versions.
+    // fast path: use 128b loads/stores to do the bulk of the work,
+    // assuming the pointers we have are all 128-bit aligned.
+
+    // main loop
+    int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
+    int Nelem = Npack * PACKELEMS;
+
+    ReduceCopy128bMultiChunk2D<FUNC, T, UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Chunk2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixCols, offset, Npack);
+
+    Nrem -= Nelem;
+    if (Nrem == 0) return;
+    offset += Nelem;
+
+    // slightly less optimized for section when we don't have full unrolling
+    Npack = Nrem / PACKELEMS;
+    Nelem = Npack * PACKELEMS;
+
+    ReduceCopy128bMultiChunk2D<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS, SRC, DST, Chunk2D>(w, nw, t, nsrcs, srcs, ndsts, dsts, linearStartOffset, srcBlock, dstBlock, matrixCols, offset, Npack);
+
+    Nrem -= Nelem;
+    if (Nrem == 0) return;
+    offset += Nelem;
+    return;
+  }
+}
+
 #endif // COMMON_KERNEL_H_
