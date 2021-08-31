@@ -567,7 +567,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
 
-    // if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scclAlgo));
+    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scclAlgo));
 
     info->comm->myParams->gridDim.x++;
     work.coll.bid = bid % nChannels;
