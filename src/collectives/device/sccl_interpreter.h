@@ -76,8 +76,10 @@ class scclFunction {
                 prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+            else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
+                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
             else if (sccltran->type == SCCL_REDUCE)
-                prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
           }
           if (sccltran->has_dependence)
             __syncthreads();
@@ -132,6 +134,10 @@ struct SimpleWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer,  nelem*count);
   }
 
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
@@ -189,6 +195,10 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
   }
@@ -240,6 +250,10 @@ struct LLWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
   
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
   }
