@@ -60,7 +60,7 @@ class scclFunction {
         T t = thisInput[myRank*sizePerChunk+j];
         for (int i = 0; i < 7; i++){
           T c = thisScratch[i*sizePerChunk+j];
-          t = (float) c + (float) t;
+          t = c + t;
         }
         thisInput[myRank*sizePerChunk+j] = t;
       }
