@@ -42,23 +42,18 @@ class scclFunction {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
-      if (tid == 0) printf("here0\n");
       prims.send(thisInput+peer*sizePerChunk, peer*sizePerChunk, 1);
-      if (tid == 0) printf("here1\n");
       prims.recv(thisScratch+bid*sizePerChunk, bid*sizePerChunk, 1);
-      if (tid == 0) printf("here1.5\n");
       if (tid == sync_tid){
         __threadfence();
         uint64_t curFlag = COMPUTE_FLAG(workIndex, 0, 0);
         scclFlags[bid].flag = curFlag;
       }
-      if (tid == 0) printf("here1.6\n");
       if (tid < 7){
         uint64_t goalFlag = COMPUTE_FLAG(workIndex, 0, 0);
         while ((scclFlags + tid)->flag < goalFlag){};
       }
       __syncthreads();
-      if (tid == 0) printf("here1.7\n");
 
       const int nthreads = args->nThreads;
       for (int j = bid*bdim+tid; j < sizePerChunk; j += nthreads*7){
@@ -70,24 +65,19 @@ class scclFunction {
         thisInput[myRank*sizePerChunk+j] = t;
       }
       __syncthreads();
-      if (tid == 0) printf("here1.8\n");
 
       if (bid*bdim < sizePerChunk && tid == sync_tid){
         __threadfence();
         uint64_t curFlag = COMPUTE_FLAG(workIndex, 0, 1);
         scclFlags[bid].flag = curFlag;
       }
-      if (tid == 0) printf("here1.9\n");
-      if (tid*bdim < sizePerChunk){
+      if (tid*bdim < sizePerChunk && tid < 7){
         uint64_t goalFlag = COMPUTE_FLAG(workIndex, 0, 1);
         while ((scclFlags + tid)->flag < goalFlag){};
       }
-      if (tid == 0) printf("here1.10\n");
       __syncthreads();
-      if (tid == 0) printf("here2\n");
       prims.send(thisInput+myRank*sizePerChunk, myRank*sizePerChunk, 1);
       prims.recv(thisInput+peer*sizePerChunk, peer*sizePerChunk, 1);
-      if (tid == 0) printf("here3\n");
     }
 };
 
