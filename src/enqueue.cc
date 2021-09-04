@@ -510,8 +510,16 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
     WARN("SCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
     return ncclInvalidUsage;
   }
-  proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
-  work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;
+
+  if (info->algorithm == NCCL_ALGO_SCCL) {
+    if (info->nBytes > 0){
+      proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+      work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;
+    } else {
+      proxyArgs->scclMaxAllowedCount = 0;
+      work->scclMaxAllowedCount = 0;
+    }
+  }
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up
