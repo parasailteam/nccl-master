@@ -20,7 +20,7 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount
         && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes)){
       NVTX3_FUNC_RANGE_IN(nccl_domain);
       struct ncclInfo info = { ncclFuncAllToAll, "AllToAll",
-        sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+        sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
         SCCL_CHUNKSTEPS, SCCL_SLICESTEPS };
       info.scclAlgoIndex = scclAlgoIndex;
       return ncclEnqueueCheck(&info);

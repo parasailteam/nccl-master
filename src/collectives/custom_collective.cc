@@ -13,7 +13,7 @@ ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t c
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   
   struct ncclInfo info = { ncclFuncCustomCollective, "CustomCollective",
-    sendbuff, recvbuff, count, datatype, comm->scclAlgos[scclAlgorithmIndex].redOp, 0, comm, stream, /* Args */
+    sendbuff, recvbuff, (recvbuff == sendbuff), count, datatype, comm->scclAlgos[scclAlgorithmIndex].redOp, 0, comm, stream, /* Args */
     SCCL_CHUNKSTEPS, SCCL_SLICESTEPS };
   info.scclAlgoIndex = scclAlgorithmIndex;
   return ncclEnqueueCheck(&info);

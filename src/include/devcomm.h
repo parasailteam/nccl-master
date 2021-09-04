@@ -181,6 +181,8 @@ struct scclAlgorithm {
   bool isValid;
   // the type of collective this algorithm is
   ncclFunc_t collectiveType;
+  // inPlace collective
+  int inPlace;
   // number of gpus in the group
   int ngpus;
   // max(#chunks in input, #chunks in output)

@@ -666,22 +666,30 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
 
-  const char* redop;
-  NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
-  if (strcmp(redop, "sum") == 0){
-    scclAlgo->redOp = ncclSum;
-  } else if (strcmp(redop, "prod") == 0){
-    scclAlgo->redOp = ncclProd;
-  } else if (strcmp(redop, "max") == 0){
-    scclAlgo->redOp = ncclMax;
-  } else if (strcmp(redop, "min") == 0){
-    scclAlgo->redOp = ncclMin;
-  } else if (strcmp(redop, "nop") == 0){
-    //If algorithm has no reduction operator then use ncclSum.
-    scclAlgo->redOp = ncclSum;
+  int redopExists = 0;
+  NCCLCHECK(xmlAttrExists(topNode, "redop", &redopExists));
+  if (redopExists){
+    const char* redop;
+    // redop exists
+    NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
+    if (strcmp(redop, "sum") == 0){
+      scclAlgo->redOp = ncclSum;
+    } else if (strcmp(redop, "prod") == 0){
+      scclAlgo->redOp = ncclProd;
+    } else if (strcmp(redop, "max") == 0){
+      scclAlgo->redOp = ncclMax;
+    } else if (strcmp(redop, "min") == 0){
+      scclAlgo->redOp = ncclMin;
+    } else if (strcmp(redop, "nop") == 0){
+      //If algorithm has no reduction operator then use ncclSum.
+      scclAlgo->redOp = ncclSum;
+    } else {
+      WARN("Redop %s is not supported.", redop);
+      return ncclInvalidUsage;
+    }
   } else {
-    WARN("Redop %s is not supported.", redop);
-    return ncclInvalidUsage;
+    // redop doesn't exist, default to nop/ncclSum
+    scclAlgo->redOp = ncclSum;
   }
 
   const char* protocol;
@@ -697,10 +705,23 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
     return ncclInvalidUsage;
   }
 
+  int minBytesExists = 0;
+  NCCLCHECK(xmlAttrExists(topNode, "minBytes", &minBytesExists));
   int64_t minBytes;
-  NCCLCHECK(xmlGetAttrInt64_t(topNode, "minBytes", &minBytes));
+  if (minBytesExists) {
+    NCCLCHECK(xmlGetAttrInt64_t(topNode, "minBytes", &minBytes));
+  } else {
+    minBytes = 0;
+  }
+
+  int maxBytesExists = 0;
+  NCCLCHECK(xmlAttrExists(topNode, "maxBytes", &maxBytesExists));
   int64_t maxBytes;
-  NCCLCHECK(xmlGetAttrInt64_t(topNode, "maxBytes", &maxBytes));
+  if (maxBytesExists) {
+    NCCLCHECK(xmlGetAttrInt64_t(topNode, "maxBytes", &maxBytes));
+  } else {
+    maxBytes = (((int64_t)1)<<35); // set max to 32 GB which is sufficient for now.
+  }
   if (minBytes > maxBytes) {
     WARN("minBytes cannot be greater than maxBytes.");
     return ncclInvalidUsage;
@@ -735,6 +756,14 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   } else {
     WARN("Collective type %s is not supported.", collectiveType);
     return ncclInvalidUsage;
+  }
+
+  int inplace;
+  NCCLCHECK(xmlGetAttrInt(topNode, "inplace", &inplace));
+  if (inplace) {
+    scclAlgo->inPlace = 1;
+  } else {
+    scclAlgo->inPlace = 0;
   }
 
   scclAlgo->nChannels = globalNChannels;
@@ -971,7 +1000,7 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
   INFO(NCCL_ENV, "SCCL_XML_FILES set by environment to %s", str);
   char* tokStr = strdup(str);
   char* tmpStr;
-  char* token = strtok_r(tokStr, ",", &tmpStr);
+  char* token = strtok_r(tokStr, ":", &tmpStr);
   comm->numberOfSCCAlgorithms = 0;
   while (token) {
     if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
@@ -981,6 +1010,7 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
     struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCAlgorithms];
     if (scclGetAlgoFromXMLAndSetComm(comm, token, scclAlgo) == ncclSuccess){
       comm->numberOfSCCAlgorithms++;
+      INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", token);
     } else {
       WARN("SCCL algorithm %s failed to initialize. Will be ignored.", token);
     }
