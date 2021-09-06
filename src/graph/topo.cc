@@ -602,7 +602,6 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
     }
     if (path->width == maxWidth && path->type == minType) nets[count++] = system->nodes[NET].nodes[n].id;
   }
-  // TODO: net device should be selected based on the XML description of the IB device. this is a hack for when nodes have multiple IB devices and NCCL gets confused about which IB device is close.
   *id = nets[rr % count];
   free(nets);
   return ncclSuccess;
@@ -666,10 +665,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
-  if (globalNChannels > comm->nChannels){
-    WARN("SCCL: algorithm needs %d channels but ended up with %d channels in comm", globalNChannels, comm->nChannels);
-    return ncclInvalidUsage;
-  }
 
   int redopExists = 0;
   NCCLCHECK(xmlAttrExists(topNode, "redop", &redopExists));

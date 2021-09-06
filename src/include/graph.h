@@ -98,7 +98,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
     struct ncclTopoRanks* topoRanks);
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns,
-    struct ncclTopoRanks** allTopoRanks, int* rings);
+    struct ncclTopoRanks** allTopoRanks, int* rings, int maxSCCLNChannels);
 
 ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, int rank);
 
