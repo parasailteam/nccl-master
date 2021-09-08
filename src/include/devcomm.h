@@ -151,8 +151,8 @@ struct scclTransfer {
 };
 
 struct scclThreadBlock {
-  int8_t sendpeer;
-  int8_t recvpeer;
+  int16_t sendpeer;
+  int16_t recvpeer;
   uint16_t nsteps;
   int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   uint16_t rid; // relative id of this thread block to the channel

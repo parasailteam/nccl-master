@@ -603,6 +603,7 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
     if (path->width == maxWidth && path->type == minType) nets[count++] = system->nodes[NET].nodes[n].id;
   }
   *id = nets[rr % count];
+
   free(nets);
   return ncclSuccess;
 }
