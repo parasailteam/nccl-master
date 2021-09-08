@@ -90,7 +90,7 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(struct cudaLaunchParams *par
   return ncclSuccess;
 }
 
-static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** work, struct ncclWorkElem* base) {
+static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** work, struct ncclWorkElem* base, int setOpIndex = -1) {
   if (channel->workCount == NCCL_MAX_OPS) {
     WARN("Too many aggregated operations on channel %d (%d max)", channel->id, NCCL_MAX_OPS);
     return ncclInvalidUsage;
@@ -109,7 +109,8 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
   }
-  e->index = opIndex;
+  e->index = (setOpIndex == -1) ? opIndex : setOpIndex;
+  base->index = e->index;
   channel->workFifoTail++;
   channel->workCount++;
   if (work) *work = w;
@@ -581,15 +582,8 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     return ncclInternalError;
   }
 
-  if (info->algorithm == NCCL_ALGO_SCCL) {
-    // SCCL needs to synchronie all channels to be at the same tail point.
-    int firstChannelTail = info->comm->channels->workFifoTail;
-    for (int i = 0; i < info->comm->nChannels; i++) {
-      struct ncclChannel* channel = info->comm->channels+i;
-      channel->workFifoTail = firstChannelTail;
-    }
-  }
-
+  // SCCL needs work->index to be set the same for all channels for info
+  int setOpIndex = -1;
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
@@ -605,7 +599,8 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
     info->comm->myParams->gridDim.x++;
     work.coll.bid = bid % nChannels;
-    NCCLCHECK(getNextOp(channel, NULL, &work));
+    NCCLCHECK(getNextOp(channel, NULL, &work, setOpIndex));
+    if (bid == 0 && info->algorithm == NCCL_ALGO_SCCL) setOpIndex = work.index;
   }
   return ncclSuccess;
 }
