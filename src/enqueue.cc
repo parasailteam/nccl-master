@@ -314,10 +314,10 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
     NCCLCHECK(collNetReduceSupport(info->datatype, info->op, &collNetTypeSupport));
   if (collNetTypeSupport != 1) nAlgos--;
   if (info->scclAlgoIndex >= 0){
+    // SCCL algorithm is already selected.
     info->algorithm = NCCL_ALGO_SCCL;
     info->protocol = info->comm->scclAlgos[info->scclAlgoIndex].protocol;
   } else {
-    // Otherwise, SCCL algorithm is already selected.
     for (int a=0; a<nAlgos; a++) {
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float time;
@@ -354,7 +354,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   // SCCL needs exactly scclAlgo.nChannels.
   if (info->algorithm == NCCL_ALGO_SCCL){
     if (comm->scclAlgos[info->scclAlgoIndex].nChannels > comm->nChannels){
-      WARN("Come must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
+      WARN("Comm must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
       return ncclInternalError;
     }
     info->nChannels = comm->scclAlgos[info->scclAlgoIndex].nChannels;
@@ -557,7 +557,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     }
     size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
     size_t rankOffset = info->comm->rank * nBytesPerRank;
-//    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
+    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
   }
 
   if (info->comm->scclAlgoShared.flagsNeedReset == 1){
@@ -622,15 +622,18 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     // Reduce the per-channel size if we cannot fully utilize the channels
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     // making sure whether all are SCCL algorithms or none at all.
-    int hasScclAlgo = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL);
+    int firstScclAlgoIndex = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL) ? comm->asyncOps[0].scclAlgoIndex : -1;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      if (hasScclAlgo && info->algorithm != NCCL_ALGO_SCCL){
-        WARN("SCCL algorithms can only be used asynchronously with other SCCL algorithm.");
+      if ((firstScclAlgoIndex >= 0) && (info->algorithm != NCCL_ALGO_SCCL || info->scclAlgoIndex != firstScclAlgoIndex)) {
+        WARN("SCCL algorithms can only be used asynchronously only with the same SCCL algorithm.");
         return ncclInvalidUsage;
       }
-      // SCCL needs to adjust nChannels in the future
-      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
+      if (firstScclAlgoIndex == -1) {
+        info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
+      } else {
+        info->nChannels = comm->scclAlgos[firstScclAlgoIndex].nChannels;
+      }
       NCCLCHECK(ncclSaveKernel(info));
     }
   }

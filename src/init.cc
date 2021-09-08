@@ -773,7 +773,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
-  int maxSCCLNChannels = 0;
+  int scclMinRequireNChannels = 0;
   int numValidSCCLAlgos; // We only use this at connect site
   if (getenv("SCCL_XML_FILES")){
     // Read SCCL algorithms first, but do not connect them yet.
@@ -782,7 +782,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){
         // Make sure SCCL at least has scclAlgo->nChannels
-        maxSCCLNChannels = std::max(comm->nChannels, scclAlgo->nChannels);
+        scclMinRequireNChannels = std::max(comm->nChannels, scclAlgo->nChannels);
       }
     }
   }
@@ -796,7 +796,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
 
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, maxSCCLNChannels));
+  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, scclMinRequireNChannels));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
